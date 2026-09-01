@@ -13,8 +13,8 @@ indicators.c/.h       LEDs and buzzer
 
 /*=================================================================================*/
 //************* Steps of what the cable_tester_init() function should do ************
-// cable_tester_init()
 /*
+cable_tester_init()
 1. Enter safe state
 2. Initialize ADS1220 (precision ADC, Analoge Digital Converter )
 3. Load calibration from Flash

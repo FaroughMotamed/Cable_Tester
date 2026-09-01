@@ -15,14 +15,14 @@ static void enter_safe_state(void)
     HAL_GPIO_WritePin(MUX_FA_EN_N_GPIO_Port,  MUX_FA_EN_N_Pin,  GPIO_PIN_SET); // Disable Force-A MUX
     HAL_GPIO_WritePin(MUX_FB_EN_N_GPIO_Port,  MUX_FB_EN_N_Pin,  GPIO_PIN_SET); // Disable Force-B MUX
     HAL_GPIO_WritePin(MUX_SA_EN_N_GPIO_Port,  MUX_SA_EN_N_Pin,  GPIO_PIN_SET); // Disable Sense-A MUX
-    HAL_GPIO_WritePin(MUX_SB_EN_N_GPIO_Port,  MUX_SA_EN_N_Pin,  GPIO_PIN_SET); // Disable Sense-B MUX
+    HAL_GPIO_WritePin(MUX_SB_EN_N_GPIO_Port,  MUX_SB_EN_N_Pin,  GPIO_PIN_SET); // Disable Sense-B MUX
 
     // Deselect all four individual MUX control interfaces.
     // 4 MUX /CS outputs are set to HIGH (pins are active low)
     HAL_GPIO_WritePin(MUX_FA_CS_N_GPIO_Port,  MUX_FA_CS_N_Pin,  GPIO_PIN_SET); // Deselect Force-A MUX control
-    HAL_GPIO_WritePin(MUX_FB_EN_N_GPIO_Port,  MUX_FB_EN_N_Pin,  GPIO_PIN_SET); // Deselect Force-B MUX control
-    HAL_GPIO_WritePin(MUX_SA_EN_N_GPIO_Port,  MUX_SA_EN_N_Pin,  GPIO_PIN_SET); // Deselect Sense-A MUX control
-    HAL_GPIO_WritePin(MUX_SB_EN_N_GPIO_Port,  MUX_SA_EN_N_Pin,  GPIO_PIN_SET); // Deselect Sense-B MUX control
+    HAL_GPIO_WritePin(MUX_FB_CS_N_GPIO_Port,  MUX_FB_CS_N_Pin,  GPIO_PIN_SET); // Deselect Force-B MUX control
+    HAL_GPIO_WritePin(MUX_SA_CS_N_GPIO_Port,  MUX_SA_CS_N_Pin,  GPIO_PIN_SET); // Deselect Sense-A MUX control
+    HAL_GPIO_WritePin(MUX_SB_CS_N_GPIO_Port,  MUX_SB_CS_N_Pin,  GPIO_PIN_SET); // Deselect Sense-B MUX control
     
     // De-activate the /WR for 4 MUXes. setting /WR to HIGH 
     // pin /WR is shared between 4 MUXes
@@ -30,32 +30,34 @@ static void enter_safe_state(void)
 
     // Set the shared MUX address (MUX 1 to 4) to 00000 , MUX  A4–A0  = 00000  (channel S1)
     // Shared address pins (A0 to A4) is shared between all 4 MUXes.
-    HAL_GPIO_WritePin(MUX_A0_GPIO_Port , MUX_A0_Pin,  GPIO_PIN_SET);   // A0=0;
-    HAL_GPIO_WritePin(MUX_A1_GPIO_Port , MUX_A1_Pin,  GPIO_PIN_SET);   // A1=0;
-    HAL_GPIO_WritePin(MUX_A2_GPIO_Port , MUX_A2_Pin,  GPIO_PIN_SET);   // A2=0;
-    HAL_GPIO_WritePin(MUX_A3_GPIO_Port , MUX_A3_Pin,  GPIO_PIN_SET);   // A3=0;
-    HAL_GPIO_WritePin(MUX_A4_GPIO_Port , MUX_A4_Pin,  GPIO_PIN_SET);   // A4=0;
+    HAL_GPIO_WritePin(MUX_A0_GPIO_Port , MUX_A0_Pin,  GPIO_PIN_RESET);   // A0=0;
+    HAL_GPIO_WritePin(MUX_A1_GPIO_Port , MUX_A1_Pin,  GPIO_PIN_RESET);   // A1=0;
+    HAL_GPIO_WritePin(MUX_A2_GPIO_Port , MUX_A2_Pin,  GPIO_PIN_RESET);   // A2=0;
+    HAL_GPIO_WritePin(MUX_A3_GPIO_Port , MUX_A3_Pin,  GPIO_PIN_RESET);   // A3=0;
+    HAL_GPIO_WritePin(MUX_A4_GPIO_Port , MUX_A4_Pin,  GPIO_PIN_RESET);   // A4=0;
+
 
     /*=================================================================================================*/
     // ************************************** Disable Precision ADC (ADS1220) **************************
     HAL_GPIO_WritePin(ADC_CS_N_GPIO_Port , ADC_CS_N_Pin,  GPIO_PIN_SET);   // Disable the ADS1220 by setting  ADC_CS_N to HIGH
 
+
     /*=================================================================================================*/
     // ************************************** Make display in-active ****************************
-
     HAL_GPIO_WritePin(LCD_CS_N_GPIO_Port, LCD_CS_N_Pin, GPIO_PIN_SET);        // LCD_CS_N to HIGH. 
     HAL_GPIO_WritePin(FLASH_CS_N_GPIO_Port, FLASH_CS_N_Pin, GPIO_PIN_SET);    // FLASH_CS_N to HIGH. 
     HAL_GPIO_WritePin(LCD_RESET_N_GPIO_Port, LCD_RESET_N_Pin, GPIO_PIN_SET);  // LCD_RESET_N to HIGH. 
-    HAL_GPIO_WritePin(LCD_DCX_GPIO_Port, LCD_DCX_Pin, GPIO_PIN_SET);          // LCD_DCX to HIGH. 
+    HAL_GPIO_WritePin(LCD_DCX_GPIO_Port, LCD_DCX_Pin, GPIO_PIN_RESET);        // LCD_DCX to LOW (command mode not data mode). 
 
 
    /*=================================================================================================*/
    // ************************************** Turn off 3 LED indicators and the buzzer *****************
+   HAL_GPIO_WritePin(LED_FAIL_GPIO_Port,   LED_FAIL_Pin,   GPIO_PIN_RESET);  // Set RED    LED_FAIL    to LOW    
+   HAL_GPIO_WritePin(LED_PASS_GPIO_Port,   LED_PASS_Pin,   GPIO_PIN_RESET);  // Set GREEN  LED_PASS    to LOW  
+   HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_RESET);  // Set BLUE   LED_STATUS  to LOW   
+   HAL_GPIO_WritePin(BUZZER_EN_GPIO_Port,  BUZZER_EN_Pin,  GPIO_PIN_RESET);  // Set BUZZER  to LOW     
+  
 
+  // LATER:  set state flgas here.
 
-
-    /* TODO: Set LED_FAIL LOW. */
-    /* TODO: Set LED_PASS LOW. */
-    /* TODO: Set LED_STATUS LOW. */
-    /* TODO: Set BUZZER_EN LOW. */
 }
