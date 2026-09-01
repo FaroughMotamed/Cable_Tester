@@ -1,6 +1,6 @@
 
-/*========================================================================*/
-//************* overall description of what different files should  do  *************
+/*=================================================================================*/
+//************* Overall description of what different files should do  *************
 /*
 cable_tester.c/.h     Overall state machine and test sequence
 adg732.c/.h           MUX control
@@ -11,8 +11,8 @@ calibration.c/.h      1 Ω and 5 Ω calibration
 indicators.c/.h       LEDs and buzzer
 */
 
-/*========================================================================*/
-//************* steps of what the cable_tester_init() function should do ************* 
+/*=================================================================================*/
+//************* Steps of what the cable_tester_init() function should do ************
 // cable_tester_init()
 /*
 1. Enter safe state
@@ -25,8 +25,8 @@ indicators.c/.h       LEDs and buzzer
 8. Enter READY state
 */
 
-/*========================================================================*/
-//*************  steps enter_safe_sate() fuction sohuld do at start up *************
+/*=================================================================================*/
+//*************  Steps enter_safe_sate() fuction sohuld do at start up *************
 // safe state means all the periphals should be in a safe state before starting the measurements.
 
 /*
@@ -56,8 +56,13 @@ LCD DCX               = LOW
 Red FAIL LED          = LOW
 Blue STATUS LED       = LOW
 Green PASS LED        = LOW
-Buzzer                 = LOW
+Buzzer                = LOW
 */
+
+
+
+
+
 
 
 
