@@ -17,6 +17,7 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include "cable_tester.h"
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
