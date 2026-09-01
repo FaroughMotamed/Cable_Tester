@@ -60,6 +60,17 @@ Buzzer                = LOW
 */
 
 
+#ifndef CABLE_TESTER_H
+#define CABLE_TESTER_H
+
+void enter_safe_state(void);
+
+//void cable_tester_init(void);
+//void cable_tester_process(void);
+
+#endif
+
+
 
 
 
