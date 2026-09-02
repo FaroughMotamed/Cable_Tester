@@ -38,7 +38,6 @@
 
  Result: 0100 0011 = 0x43
  */
-
 #define ADS1220_CMD_WRITE_ALL_REGISTERS 0x43U
 
 #define ADS1220_REGISTER_COUNT  4U
@@ -82,12 +81,10 @@ static bool ads1220_send_command(uint8_t command)
                                // SPI peripheral, Address of transmitted data, Number of bytes, Maximum waiting time
     hal_status = HAL_SPI_Transmit(ads1220_spi   , &command                   , 1U             , ADS1220_SPI_TIMEOUT_MS);
 
-    ads1220_deselect();
+    ads1220_deselect(); // make the /CS high to deselect the ADS1220
 
     return (hal_status == HAL_OK);
 }
-
-
 
 
 // Write all four ADS1220 configuration registers.
@@ -144,6 +141,53 @@ static bool ads1220_write_registers(const uint8_t registers[ADS1220_REGISTER_COU
 
     return (hal_status == HAL_OK);
 }
+
+
+// Read all four ADS1220 configuration registers.
+static bool ads1220_read_registers(uint8_t registers[ADS1220_REGISTER_COUNT])
+{
+    uint8_t command = ADS1220_CMD_READ_ALL_REGISTERS;
+    HAL_StatusTypeDef hal_status;
+
+    if ((ads1220_spi == NULL) || (registers == NULL))
+    {
+        return false;
+    }
+
+    ads1220_select();
+
+    
+    // Tell the ADS1220 which registers I want to read.
+    hal_status = HAL_SPI_Transmit(ads1220_spi, &command,  1U,  ADS1220_SPI_TIMEOUT_MS);
+
+    if (hal_status == HAL_OK)
+    {
+        // Keep CS LOW and receive the four register values.
+        hal_status = HAL_SPI_Receive(ads1220_spi, registers,  ADS1220_REGISTER_COUNT, ADS1220_SPI_TIMEOUT_MS);
+    }
+
+    ads1220_deselect();
+
+    return (hal_status == HAL_OK);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
