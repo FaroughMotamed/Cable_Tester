@@ -173,6 +173,67 @@ static bool ads1220_read_registers(uint8_t registers[ADS1220_REGISTER_COUNT])
 
 
 
+/*
+ ADS1220 configuration used by the cable tester.
+
+ Register 0 = 0x01
+     AINP = AIN0
+     AINN = AIN1
+     Gain = 1
+     PGA bypassed
+
+ Register 1 = 0x20
+     Data rate = 45 SPS
+     Normal operating mode
+     Single-shot conversion mode
+     Temperature sensor disabled
+     Burnout current sources disabled
+
+ Register 2 = 0x00
+     Internal 2.048 V reference
+     Low-side power switch open
+     IDAC current sources disabled
+
+ Register 3 = 0x00
+     IDAC routing disabled
+     Dedicated DRDY output mode
+*/
+static const uint8_t ads1220_configuration[ADS1220_REGISTER_COUNT] =
+{
+    0x01U,
+    0x20U,
+    0x00U,
+    0x00U
+};
+
+
+// Compare values read from the ADS1220 with  values firmware attempted to write.
+static bool ads1220_registers_match( const uint8_t expected[ADS1220_REGISTER_COUNT], const uint8_t actual[ADS1220_REGISTER_COUNT])
+{
+     
+    for (uint8_t register_index = 0U; register_index < ADS1220_REGISTER_COUNT;  register_index++)
+    {
+        if (actual[register_index] != expected[register_index])
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
