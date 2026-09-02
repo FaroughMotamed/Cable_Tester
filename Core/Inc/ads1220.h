@@ -18,4 +18,3 @@
 bool ads1220_init(SPI_HandleTypeDef *hspi);
 
 #endif
-

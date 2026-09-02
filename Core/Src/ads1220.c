@@ -1,5 +1,7 @@
 
 #include "ads1220.h"
+#include <stdbool.h>
+#include <stdint.h>
 
 // ADS1220 SPI commands.
 #define ADS1220_CMD_RESET           0x06U
@@ -43,7 +45,6 @@
 #define ADS1220_SPI_TIMEOUT_MS  100U
 
 
-
 // Pointer to the SPI peripheral supplied by ads1220_init().
 // For this project, it will point to hspi3.
 static SPI_HandleTypeDef *ads1220_spi = NULL;
@@ -65,15 +66,11 @@ static void ads1220_deselect(void)
 }
 
 
-
-
-
 //Send one command byte to the ADS1220.
 static bool ads1220_send_command(uint8_t command)
 {
     HAL_StatusTypeDef hal_status;
 
-    
     //The SPI pointer must have been supplied by ads1220_init().
     if (ads1220_spi == NULL)
     {
@@ -82,13 +79,82 @@ static bool ads1220_send_command(uint8_t command)
 
     ads1220_select();
 
-    //                            SPI peripheral, Address of transmitted data, Number of bytes, Maximum waiting time
+                               // SPI peripheral, Address of transmitted data, Number of bytes, Maximum waiting time
     hal_status = HAL_SPI_Transmit(ads1220_spi   , &command                   , 1U             , ADS1220_SPI_TIMEOUT_MS);
 
     ads1220_deselect();
 
     return (hal_status == HAL_OK);
 }
+
+
+
+
+// Write all four ADS1220 configuration registers.
+static bool ads1220_write_registers(const uint8_t registers[ADS1220_REGISTER_COUNT])
+{
+    uint8_t transmit_data[5];
+    HAL_StatusTypeDef hal_status;
+
+    if ((ads1220_spi == NULL) || (registers == NULL))
+    {
+        return false;
+    }
+
+    
+    // The first byte is the Write REG command.
+    // The following four bytes are register values.
+    transmit_data[0] = ADS1220_CMD_WRITE_ALL_REGISTERS;
+    transmit_data[1] = registers[0];
+    transmit_data[2] = registers[1];
+    transmit_data[3] = registers[2];
+    transmit_data[4] = registers[3];
+
+    /*
+    0x43:
+    Write four configuration registers beginning at register 0
+
+    0x01:
+    Measure AIN0 − AIN1
+    Gain 1
+    PGA bypassed
+
+    0x20:
+    45 SPS
+    Normal mode
+    Single-shot
+    Temperature sensor off
+    Burnout current sources off
+
+    0x00:
+    Internal 2.048 V reference
+    Low-side switch open
+    IDAC current sources off
+
+    0x00:
+    IDAC routing disabled
+    Normal DRDY operation
+    */
+
+    ads1220_select();
+
+    hal_status = HAL_SPI_Transmit(ads1220_spi, transmit_data,  sizeof(transmit_data),  ADS1220_SPI_TIMEOUT_MS);
+
+    ads1220_deselect();
+
+    return (hal_status == HAL_OK);
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 
