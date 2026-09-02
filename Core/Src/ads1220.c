@@ -2,10 +2,10 @@
 #include "ads1220.h"
 
 // ADS1220 SPI commands.
-#define ADS1220_CMD_RESET       0x06U
-#define ADS1220_CMD_START_SYNC  0x08U
-#define ADS1220_CMD_POWERDOWN   0x02U
-#define ADS1220_CMD_RDATA       0x10U
+#define ADS1220_CMD_RESET           0x06U
+#define ADS1220_CMD_START_SYNC      0x08U
+#define ADS1220_CMD_POWERDOWN       0x02U
+#define ADS1220_CMD_READDATA        0x10U
 
 // U :unsinged integer
 
@@ -68,6 +68,27 @@ static void ads1220_deselect(void)
 
 
 
+//Send one command byte to the ADS1220.
+static bool ads1220_send_command(uint8_t command)
+{
+    HAL_StatusTypeDef hal_status;
+
+    
+    //The SPI pointer must have been supplied by ads1220_init().
+    if (ads1220_spi == NULL)
+    {
+        return false;
+    }
+
+    ads1220_select();
+
+    //                            SPI peripheral, Address of transmitted data, Number of bytes, Maximum waiting time
+    hal_status = HAL_SPI_Transmit(ads1220_spi   , &command                   , 1U             , ADS1220_SPI_TIMEOUT_MS);
+
+    ads1220_deselect();
+
+    return (hal_status == HAL_OK);
+}
 
 
 
@@ -80,3 +101,41 @@ static void ads1220_deselect(void)
 
 
 
+
+
+
+
+
+
+
+
+
+static int32_t ads1220_combine_bytes(const uint8_t data[3])
+{
+    uint32_t raw_code;
+
+    /*
+     * Place the three ADS1220 bytes in their correct positions:
+     *
+     * data[0] → bits 23–16
+     * data[1] → bits 15–8
+     * data[2] → bits 7–0
+     */
+    raw_code = ((uint32_t)data[0] << 16)
+             | ((uint32_t)data[1] << 8)
+             |  (uint32_t)data[2];
+
+
+
+    int32_t signed_code;
+    if ((raw_code & 0x00800000U) != 0U)
+    {
+        signed_code = (int32_t)(raw_code - 0x01000000U);
+    }
+    else
+    {
+        signed_code = (int32_t)raw_code;
+    }
+
+    return signed_code;
+}
