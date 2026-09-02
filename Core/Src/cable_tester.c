@@ -131,18 +131,16 @@ void cable_tester_init(void)
   set_indicator_mode(INDICATOR_INIT);
 
 
-
-
 /*
-1. Enter safe state
-   set indicator mode
-2. Initialize ADS1220 (precision ADC, Analoge Digital Converter )
-3. Load calibration from Flash
-4. Initialize  encoder
-5. Read the selector
-6. Initialize  display
-7. Verify current source
-8. Enter READY state
+Enter safe state
+set indicator mode
+Initialize ADS1220 (precision ADC, Analoge Digital Converter )
+Load calibration from Flash
+Initialize  encoder
+Read the selector
+Initialize  display
+Verify current source
+Enter READY state
 */
 
 }
