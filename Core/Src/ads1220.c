@@ -8,9 +8,8 @@
 #define ADS1220_CMD_START_SYNC      0x08U
 #define ADS1220_CMD_POWERDOWN       0x02U
 #define ADS1220_CMD_READDATA        0x10U
-
-// U :unsinged integer
-
+#define ADS1220_REGISTER_COUNT      4U
+#define ADS1220_SPI_TIMEOUT_MS      100U
 /*
  Read all four registers, starting at register 0.
  Read REG command format:
@@ -40,8 +39,7 @@
  */
 #define ADS1220_CMD_WRITE_ALL_REGISTERS 0x43U
 
-#define ADS1220_REGISTER_COUNT  4U
-#define ADS1220_SPI_TIMEOUT_MS  100U
+
 
 
 // Pointer to the SPI peripheral supplied by ads1220_init().
@@ -55,7 +53,6 @@ static void ads1220_select(void)
 {
     HAL_GPIO_WritePin(ADC_CS_N_GPIO_Port, ADC_CS_N_Pin, GPIO_PIN_RESET);
 }
-
 
 // End SPI communication with the ADS1220.
 // HIGH deselects the ADC and releases its SPI interface.
@@ -172,7 +169,6 @@ static bool ads1220_read_registers(uint8_t registers[ADS1220_REGISTER_COUNT])
 }
 
 
-
 /*
  ADS1220 configuration used by the cable tester.
 
@@ -210,7 +206,6 @@ static const uint8_t ads1220_configuration[ADS1220_REGISTER_COUNT] =
 // Compare values read from the ADS1220 with  values firmware attempted to write.
 static bool ads1220_registers_match( const uint8_t expected[ADS1220_REGISTER_COUNT], const uint8_t actual[ADS1220_REGISTER_COUNT])
 {
-     
     for (uint8_t register_index = 0U; register_index < ADS1220_REGISTER_COUNT;  register_index++)
     {
         if (actual[register_index] != expected[register_index])
@@ -221,6 +216,72 @@ static bool ads1220_registers_match( const uint8_t expected[ADS1220_REGISTER_COU
 
     return true;
 }
+
+
+
+
+bool ads1220_init(SPI_HandleTypeDef *hspi)
+{
+    uint8_t read_back[ADS1220_REGISTER_COUNT]; // array to keep the register data after read needed for comparison.
+
+    if (hspi == NULL)
+    {
+        return false;
+    }
+
+    
+    //Save the address of the SPI peripheral used by the ADS1220. For this project, hspi will normally be &hspi3.
+    ads1220_spi = hspi;
+
+    // deselected ADS1220 
+    ads1220_deselect();
+
+
+    // Allow  the sds1220 to settle for 2ms.
+    HAL_Delay(2U);
+
+    
+    //Reset the ADS1220 through SPI.
+    if (!ads1220_send_command(ADS1220_CMD_RESET))
+    {
+        return false;
+    }
+
+    
+    // Wait for reset to complete. 50 microseconds + 32 × tCLK . it needs 2 ms.
+    HAL_Delay(2U);
+
+    /*
+     * Write the four desired configuration registers.
+     */
+    if (!ads1220_write_registers(ads1220_configuration))
+    {
+        return false;
+    }
+
+    /*
+     * Read the registers back from the ADS1220.
+     */
+    if (!ads1220_read_registers(read_back))
+    {
+        return false;
+    }
+
+    /*
+     * Initialization succeeds only if the ADS1220 stored
+     * exactly the configuration that we sent.
+     */
+    if (!ads1220_registers_match(
+            ads1220_configuration,
+            read_back))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+
 
 
 
