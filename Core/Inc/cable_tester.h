@@ -26,7 +26,7 @@ cable_tester_init()
 */
 
 /*=================================================================================*/
-//*************  Steps enter_safe_sate() fuction sohuld do at start up *************
+//*************  Steps enter_safe_sate() fuction should do at start up *************
 // safe state means all the periphals should be in a safe state before starting the measurements.
 
 /*
@@ -42,7 +42,7 @@ cable_tester_init()
 10. Reset state flags 
 */
 
-/// Summary:
+/// Summary of the safe_state():
 /*
 MUX /EN signals       = HIGH
 MUX /CS signals       = HIGH
@@ -63,10 +63,8 @@ Buzzer                = LOW
 #ifndef CABLE_TESTER_H
 #define CABLE_TESTER_H
 
-void enter_safe_state(void);
-
-//void cable_tester_init(void);
-//void cable_tester_process(void);
+void cable_tester_init(void);
+void cable_tester_process(void);
 
 #endif
 
