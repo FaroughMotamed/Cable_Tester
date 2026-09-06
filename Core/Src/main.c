@@ -17,8 +17,11 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include "cable_tester.h"
+
 #include "main.h"
+#include "cable_tester.h"
+#include "ads1220.h"
+#include "stdio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -64,6 +67,7 @@ static void MX_SPI1_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
+
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
@@ -76,6 +80,11 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+    bool ads1220_ready = ads1220_init(&hspi3);
+
+    if(!ads1220_ready){
+      printf("ads1220 init failed"); //Error_Handler();
+    }
 
   /* USER CODE END 1 */
 

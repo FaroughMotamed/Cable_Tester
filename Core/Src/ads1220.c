@@ -40,8 +40,6 @@
 #define ADS1220_CMD_WRITE_ALL_REGISTERS 0x43U
 
 
-
-
 // Pointer to the SPI peripheral supplied by ads1220_init().
 // For this project, it will point to hspi3.
 static SPI_HandleTypeDef *ads1220_spi = NULL;
@@ -218,8 +216,6 @@ static bool ads1220_registers_match( const uint8_t expected[ADS1220_REGISTER_COU
 }
 
 
-
-
 bool ads1220_init(SPI_HandleTypeDef *hspi)
 {
     uint8_t read_back[ADS1220_REGISTER_COUNT]; // array to keep the register data after read needed for comparison.
@@ -229,25 +225,21 @@ bool ads1220_init(SPI_HandleTypeDef *hspi)
         return false;
     }
 
-    
     //Save the address of the SPI peripheral used by the ADS1220. For this project, hspi will normally be &hspi3.
     ads1220_spi = hspi;
 
     // deselected ADS1220 
     ads1220_deselect();
 
-
     // Allow  the sds1220 to settle for 2ms.
     HAL_Delay(2U);
 
-    
     //Reset the ADS1220 through SPI.
     if (!ads1220_send_command(ADS1220_CMD_RESET))
     {
         return false;
     }
 
-    
     // Wait for reset to complete. 50 microseconds + 32 × tCLK . it needs 2 ms.
     HAL_Delay(2U);
 
@@ -267,13 +259,9 @@ bool ads1220_init(SPI_HandleTypeDef *hspi)
         return false;
     }
 
-    /*
-     * Initialization succeeds only if the ADS1220 stored
-     * exactly the configuration that we sent.
-     */
-    if (!ads1220_registers_match(
-            ads1220_configuration,
-            read_back))
+
+    // sent and read configuration must match
+    if (!ads1220_registers_match( ads1220_configuration, read_back))
     {
         return false;
     }
