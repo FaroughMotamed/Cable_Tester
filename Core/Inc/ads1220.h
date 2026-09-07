@@ -29,6 +29,15 @@
 
 bool ads1220_init(SPI_HandleTypeDef *hspi);
 
+typedef enum
+{
+    ADS1220_CABLE_SELECT = 0,
+    ADS1220_RESISTOR_SELECT=1
+} ads1220_input_type;
+
+
+bool ads1220_select_input(ads1220_input_type input);
+
 
 
 #endif

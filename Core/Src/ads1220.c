@@ -218,7 +218,7 @@ static bool ads1220_registers_match( const uint8_t expected[ADS1220_REGISTER_COU
 
 bool ads1220_init(SPI_HandleTypeDef *hspi)
 {
-    uint8_t read_back[ADS1220_REGISTER_COUNT]; // array to keep the register data after read needed for comparison.
+    uint8_t read_back[ADS1220_REGISTER_COUNT]; // read_back is an array to keep the register data after read needed for comparison.
 
     if (hspi == NULL)
     {
