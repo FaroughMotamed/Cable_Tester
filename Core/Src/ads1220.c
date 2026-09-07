@@ -1,4 +1,4 @@
-
+#include <main.h>
 #include "ads1220.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -338,8 +338,29 @@ static bool ads1220_read_registers(uint8_t registers[ADS1220_REGISTER_COUNT])
     return (hal_status == HAL_OK);
 }
 
+/*
+Register 0 = 0x01
+        AINP = AIN0
+        AINN = AIN1
+        Gain = 1
+        PGA bypassed
 
+Register 1 = 0x20
+        Data rate = 45 SPS
+        Normal operating mode
+        Single-shot conversion mode
+        Temperature sensor disabled
+        Burnout current sources disabled
 
+Register 2 = 0x00
+        Internal 2.048 V reference
+        Low-side power switch open
+        IDAC current sources disabled
+
+Register 3 = 0x00
+        IDAC routing disabled
+        Dedicated DRDY output mode
+*/
 static const uint8_t ads1220_configuration[ADS1220_REGISTER_COUNT] =
 {
     0x01U,
@@ -419,19 +440,71 @@ bool ads1220_init(SPI_HandleTypeDef *hspi)
 
 
 
-bool ads1220_select_input(ads1220_input_type input){
+/*
+ Select the ADS1220 differential input pair.
+ AIN0 - AIN1: cable voltage
+ AIN2 - AIN3: 200 ohm resistor voltage
+ */
+bool ads1220_select_input(ads1220_input_type input)
+{
+    uint8_t input_pair_setting;
+    uint8_t register_0_value;
+
+    switch (input)
+    {
+        case ADS1220_CABLE_SELECT:
+        {
+            input_pair_setting = ADS1220_MUX_AIN0_AIN1;
+            break;
+        }
+
+        case ADS1220_RESISTOR_SELECT:
+        {
+            input_pair_setting = ADS1220_MUX_AIN2_AIN3;
+            break;
+        }
+
+        default:
+        {
+            return false;
+        }
+    }
+
+    /*
+     Begin with the original register 0 configuration.
+     Clear bits 7:4, which select the analog-input pair.
+     Preserve bits 3:0 containing gain and PGA settings.
+     */
+    register_0_value = ads1220_configuration[0] & (uint8_t)(0x0F);
+
+    //Put the selected input pair into bits 7:4. The first four digits of the input_pair_setting are zero. 
+    register_0_value = register_0_value | input_pair_setting;
+
+    // write the completed value into configuration register 0.
+    if (ads1220_write_register(ADS1220_REG_CONFIG_0, register_0_value)){
+
+        return true;
+    }
+    else{
+
+        return false;
+    }
+
+};
+
+// ads is set up to do signle conversion. For every conversion a start command is needed.
+bool ads1220_start_conversion(void){
+
+    if (ads1220_send_command(ADS1220_CMD_START_SYNC)){
+        return true;
+    }
+    else{
+        return false;
+    }
+};
 
 
 
-}
-
-
-
-
-
-
-// bool ads1220_select_input(...);
-// bool ads1220_start_conversion(void);
 // bool ads1220_wait_drdy(uint32_t timeout_ms);
 // bool ads1220_read_raw(int32_t *raw_code);
 // float ads1220_code_to_voltage(int32_t raw_code);

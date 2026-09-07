@@ -38,6 +38,8 @@ typedef enum
 
 bool ads1220_select_input(ads1220_input_type input);
 
+bool ads1220_start_conversion(void);
+
 
 
 #endif
