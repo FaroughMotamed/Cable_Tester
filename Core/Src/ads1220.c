@@ -3,6 +3,164 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/*=================================================== Start of comment section =========================================================*/
+//========================== Communication method for ADS1220 (24 bit analogue digital converter component (ADC)) =======================
+
+/*
+ADS1220 reads the voltage difference across the cable threads and across the 200 Ohm precision resistor.
+Voltage readings are used to caclulate the current the goes through the cable thread and then calculate the resistance of the cable thread.
+
+STM32 commnicates to the ADS1220 through SPI.
+Note: commands required to write and read registers are different from the commands required to read voltage conversion results.
+
+Sequence of communication:
+1. First we write into registers to determine what ADC channels (AIN 0-1 , AIN 2-3) to use and what the reading speed is.
+2. Then we read the registers back to make sure writing the registers was successful.
+3. Then we send commands to read the conversion results.
+
+Command structure to write and read registers:
+5 bytes are needed to send a complete regiater write or read command. (fewere registers can be used if the rest are already set)
+The first byte determines whether the command is write or read  and how many registers to write/read starting from what register.
+The rest of the 4 bytes determine the ADC channel (AIN 0-1 , AIN 2-3), speed of reading , etc.
+*/
+
+/*
+Example register configuration used by the cable tester.
+
+//  calculate the command to set up the write process into all registers starting at register 0. Then  determine the value of each registor 0 to 4.
+
+    Write all four registers, starting at register 0.
+    Write REG command format:
+ 
+    0100 rrnn
+    
+    Starting register rr= 0
+    Number of registers = 4
+    Therefore nn = 3  ----> rrnn = 0x03 = 0011
+
+    Result: 0100 0011 = 0x43  ---> define ADS1220_CMD_WRITE_ALL_REGISTERS 0x43U
+
+    //
+    Register 0 = 0x01
+            AINP = AIN0
+            AINN = AIN1
+            Gain = 1
+            PGA bypassed
+
+    Register 1 = 0x20
+            Data rate = 45 SPS
+            Normal operating mode
+            Single-shot conversion mode
+            Temperature sensor disabled
+            Burnout current sources disabled
+
+    Register 2 = 0x00
+            Internal 2.048 V reference
+            Low-side power switch open
+            IDAC current sources disabled
+
+    Register 3 = 0x00
+            IDAC routing disabled
+            Dedicated DRDY output mode
+*/
+
+/*
+Example command to select channel AIN0-AIN1: 
+command    (1st byte ) : 0x40 → write one register starting at register 0
+Register 0 (2nd byte ) : 0x01 → select AIN0 − AIN1, gain 1, PGA bypassed
+*/
+
+
+/*
+The sequence to read the voltage conversion from each input pair (AIN 0-1, AIN 2-3)
+0. Send the required write command to determine what register/registers you want to write into.
+1. Write the input selection into configuration register 0.
+2. Send START/SYNC.
+3. Wait for DRDY to become low.
+4. Send READYDATA command.
+5. Read three conversion bytes.
+6. If the result is wrong? Then  read again.
+*/
+
+/*
+The complete SPI sequence for the AIN 0-1 measurment is:
+
+CS LOW      // select the Ads1220
+Send 0x40   // send the write register command (through SPI)
+Send 0x01   // select channel AIN 0-1  0x01,  Select AIN2 − AIN3   0x31   (through SPI)
+CS HIGH     // de-select the ADC
+
+CS LOW      // select the Ads1220
+Send 0x08   // Send START command (SPI)
+CS HIGH     // de-select the ADC
+
+Wait until DRDY LOW
+
+CS LOW       // select the Ads1220
+Send 0x10    // send READYDATA command (SPI)
+Read byte 2  // READ 3 bytes
+Read byte 1
+Read byte 0
+CS HIGH      // de-select the ADC
+*/
+
+
+/* ===============  Example how to calculate command and register values for reading channel AIN 0-1 =================
+Calculate values for AIN 0-1 one time measurment:
+
+## Write command for a single register starting from register 0: 0x40U
+
+## Calculate value for register 0
+MUX  = 0000 → AIN0 − AIN1
+GAIN = 000  → gain 1
+PGA_BYPASS = 1
+Register 0 = 0000 0001 = 0x01
+
+// Example code for SPI command structure
+
+uint8_t select_ain0_ain1[2] = {  0x40U,  0x01U  };
+
+ads1220_select();
+                   SPI peripheral,     Address of transmitted data,    Number of bytes,    Maximum waiting time
+HAL_SPI_Transmit(  ads1220_spi   ,     select_ain0_ain1           ,    2U             ,    ADS1220_SPI_TIMEOUT_MS);
+*/
+
+/*===================================== End of comment section ===============================================*/
+
+//  command value to write all registers starting at register 0
+#define ADS1220_CMD_WRITE_ALL_REGISTERS 0x43U
+/*
+ Write all four registers, starting at register 0.
+ Write REG command format:
+ 
+ 0100 rrnn
+ 
+ Starting register rr= 0
+ Number of registers = 4
+ Therefore nn = 3
+ rrnn = 03 = 0x0011
+
+ Result: 0100 0011 = 0x43
+*/
+
+//  command value to read all registers starting at register 0
+#define ADS1220_CMD_READ_ALL_REGISTERS  0x23U
+/*
+ Read all four registers, starting at register 0.
+ Read REG command format:
+ 0010 rrnn
+ rr = starting register address
+ nn = number of registers minus one
+ 
+ Starting register rr = 0
+ Number of registers = 4
+ Therefore nn = 3 
+ rrnn = 03 = 0x0011
+
+ Result: 0010 0011 = 0x23
+ */
+
+
 // ADS1220 SPI commands.
 #define ADS1220_CMD_RESET           0x06U
 #define ADS1220_CMD_START_SYNC      0x08U
@@ -10,34 +168,12 @@
 #define ADS1220_CMD_READDATA        0x10U
 #define ADS1220_REGISTER_COUNT      4U
 #define ADS1220_SPI_TIMEOUT_MS      100U
-/*
- Read all four registers, starting at register 0.
- Read REG command format:
- 0010 rr nn
- rr = starting register address
- nn = number of registers minus one
- 
- Starting register rr = 0
- Number of registers = 4
- Therefore nn = 3
 
- Result: 0010 0011 = 0x23
- */
-#define ADS1220_CMD_READ_ALL_REGISTERS  0x23U
-
-/*
- Write all four registers, starting at register 0.
- Write REG command format:
- 
- 0100 rr nn
- 
- Starting register rr= 0
- Number of registers = 4
- Therefore nn = 3
-
- Result: 0100 0011 = 0x43
- */
-#define ADS1220_CMD_WRITE_ALL_REGISTERS 0x43U
+#define ADS1220_CMD_WREG            0x40U
+#define ADS1220_REG_CONFIG_0        0x00U
+#define ADS1220_MUX_MASK            0xF0U
+#define ADS1220_MUX_AIN0_AIN1       0x00U
+#define ADS1220_MUX_AIN2_AIN3       0x30U
 
 
 // Pointer to the SPI peripheral supplied by ads1220_init().
@@ -82,6 +218,84 @@ static bool ads1220_send_command(uint8_t command)
 }
 
 
+/*   ads1220_write_register function description:
+Write one value into one ADS1220 configuration register.
+ register_address:
+     Configuration register address from 0 to 3.
+ register_value:
+     Value to store in that configuration register.
+ Returns:
+     true  when the SPI transmission succeeds.
+     false when an argument is invalid or SPI fails.
+*/
+static bool ads1220_write_register( uint8_t register_address, uint8_t register_value)
+{
+    uint8_t transmit_data[2];
+    HAL_StatusTypeDef hal_status;
+
+    /*
+     * ads1220_init() must provide the SPI handle first.
+     */
+    if (ads1220_spi == NULL)
+    {
+        return false;
+    }
+
+    /*
+     * The ADS1220 has four configuration registers:
+     * register 0, 1, 2 and 3.
+     */
+    if (register_address >= ADS1220_REGISTER_COUNT)
+    {
+        return false;
+    }
+
+    /*
+     * Construct the WREG command:
+     *
+     * Bits 7:4 = 0100: write-register command
+     * Bits 3:2 = starting register address
+     * Bits 1:0 = number of registers minus one
+     *
+     * This function writes exactly one register, so
+     * bits 1:0 remain 00.
+     */
+    transmit_data[0] =
+        ADS1220_CMD_WRITE_REGISTER |
+        ((register_address & 0x03U) << 2U);
+
+    /*
+     * The second SPI byte is the value that will be
+     * stored in the selected register.
+     */
+    transmit_data[1] = register_value;
+
+    /*
+     * Pull ADC_CS_N low to select the ADS1220.
+     */
+    ads1220_select();
+
+    /*
+     * Send both bytes:
+     *
+     * transmit_data[0] = command and register address
+     * transmit_data[1] = new register value
+     */
+    hal_status = HAL_SPI_Transmit(
+        ads1220_spi,
+        transmit_data,
+        2U,
+        ADS1220_SPI_TIMEOUT_MS);
+
+    /*
+     * Always release chip select after the transaction.
+     */
+    ads1220_deselect();
+
+    return (hal_status == HAL_OK);
+}
+
+
 // Write all four ADS1220 configuration registers.
 static bool ads1220_write_registers(const uint8_t registers[ADS1220_REGISTER_COUNT])
 {
@@ -101,32 +315,6 @@ static bool ads1220_write_registers(const uint8_t registers[ADS1220_REGISTER_COU
     transmit_data[2] = registers[1];
     transmit_data[3] = registers[2];
     transmit_data[4] = registers[3];
-
-    /*
-    0x43:
-    Write four configuration registers beginning at register 0
-
-    0x01:
-    Measure AIN0 − AIN1
-    Gain 1
-    PGA bypassed
-
-    0x20:
-    45 SPS
-    Normal mode
-    Single-shot
-    Temperature sensor off
-    Burnout current sources off
-
-    0x00:
-    Internal 2.048 V reference
-    Low-side switch open
-    IDAC current sources off
-
-    0x00:
-    IDAC routing disabled
-    Normal DRDY operation
-    */
 
     ads1220_select();
 
@@ -167,31 +355,7 @@ static bool ads1220_read_registers(uint8_t registers[ADS1220_REGISTER_COUNT])
 }
 
 
-/*
- ADS1220 configuration used by the cable tester.
 
- Register 0 = 0x01
-     AINP = AIN0
-     AINN = AIN1
-     Gain = 1
-     PGA bypassed
-
- Register 1 = 0x20
-     Data rate = 45 SPS
-     Normal operating mode
-     Single-shot conversion mode
-     Temperature sensor disabled
-     Burnout current sources disabled
-
- Register 2 = 0x00
-     Internal 2.048 V reference
-     Low-side power switch open
-     IDAC current sources disabled
-
- Register 3 = 0x00
-     IDAC routing disabled
-     Dedicated DRDY output mode
-*/
 static const uint8_t ads1220_configuration[ADS1220_REGISTER_COUNT] =
 {
     0x01U,
@@ -271,12 +435,22 @@ bool ads1220_init(SPI_HandleTypeDef *hspi)
 
 
 
+bool ads1220_select_input(ads1220_input_type input){
+
+
+
+}
 
 
 
 
 
 
+// bool ads1220_select_input(...);
+// bool ads1220_start_conversion(void);
+// bool ads1220_wait_drdy(uint32_t timeout_ms);
+// bool ads1220_read_raw(int32_t *raw_code);
+// float ads1220_code_to_voltage(int32_t raw_code);
 
 
 
