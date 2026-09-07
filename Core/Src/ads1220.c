@@ -169,11 +169,12 @@ HAL_SPI_Transmit(  ads1220_spi   ,     select_ain0_ain1           ,    2U       
 #define ADS1220_REGISTER_COUNT      4U
 #define ADS1220_SPI_TIMEOUT_MS      100U
 
-#define ADS1220_CMD_WREG            0x40U
+#define ADS1220_CMD_WRITE_REGISTER  0x40U
 #define ADS1220_REG_CONFIG_0        0x00U
 #define ADS1220_MUX_MASK            0xF0U
 #define ADS1220_MUX_AIN0_AIN1       0x00U
 #define ADS1220_MUX_AIN2_AIN3       0x30U
+
 
 
 // Pointer to the SPI peripheral supplied by ads1220_init().
@@ -228,68 +229,51 @@ Write one value into one ADS1220 configuration register.
      true  when the SPI transmission succeeds.
      false when an argument is invalid or SPI fails.
 */
-static bool ads1220_write_register( uint8_t register_address, uint8_t register_value)
+bool ads1220_write_register( uint8_t register_address, uint8_t register_value)
 {
     uint8_t transmit_data[2];
     HAL_StatusTypeDef hal_status;
 
-    /*
-     * ads1220_init() must provide the SPI handle first.
-     */
     if (ads1220_spi == NULL)
     {
         return false;
     }
 
-    /*
-     * The ADS1220 has four configuration registers:
-     * register 0, 1, 2 and 3.
-     */
+    
+    // The ADS1220 has four configuration registers:
+    // register 0, 1, 2 and 3.
     if (register_address >= ADS1220_REGISTER_COUNT)
     {
         return false;
     }
 
     /*
-     * Construct the WREG command:
-     *
-     * Bits 7:4 = 0100: write-register command
-     * Bits 3:2 = starting register address
-     * Bits 1:0 = number of registers minus one
-     *
-     * This function writes exactly one register, so
-     * bits 1:0 remain 00.
+     Build the write register command:
+     
+     Bits 7:4 = 0100: write-register command
+     Bits 3:2 = starting register address
+     Bits 1:0 = number of registers minus one
+     
+     This function writes  one register, so bits 1:0 remain 00.
      */
-    transmit_data[0] =
-        ADS1220_CMD_WRITE_REGISTER |
-        ((register_address & 0x03U) << 2U);
+                                                       // first extract the last two bits from the register_address variable. --> register_address & 0x03U
+                                                       // since only one register is written, the last two bits remain zero uisng --> <<2U.
+    transmit_data[0] =  ADS1220_CMD_WRITE_REGISTER |  ((register_address & 0x03U) << 2U);
 
-    /*
-     * The second SPI byte is the value that will be
-     * stored in the selected register.
-     */
+    // The second SPI byte is the value that will be stored in the selected register.
     transmit_data[1] = register_value;
 
-    /*
-     * Pull ADC_CS_N low to select the ADS1220.
-     */
+    // Pull ADC_CS_N low to select the ADS1220.
     ads1220_select();
 
-    /*
-     * Send both bytes:
-     *
-     * transmit_data[0] = command and register address
-     * transmit_data[1] = new register value
-     */
-    hal_status = HAL_SPI_Transmit(
-        ads1220_spi,
-        transmit_data,
-        2U,
-        ADS1220_SPI_TIMEOUT_MS);
 
-    /*
-     * Always release chip select after the transaction.
-     */
+    // Send both bytes:
+    // transmit_data[0] = command and register address
+    // transmit_data[1] = new register value
+    hal_status = HAL_SPI_Transmit( ads1220_spi,  transmit_data,  2U, ADS1220_SPI_TIMEOUT_MS);
+
+ 
+    // release chip select after the transaction.
     ads1220_deselect();
 
     return (hal_status == HAL_OK);
