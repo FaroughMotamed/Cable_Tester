@@ -163,20 +163,22 @@ HAL_SPI_Transmit(  ads1220_spi   ,     select_ain0_ain1           ,    2U       
 
 
 // ADS1220 SPI commands.
-#define ADS1220_CMD_RESET           0x06U
-#define ADS1220_CMD_START_SYNC      0x08U
-#define ADS1220_CMD_POWERDOWN       0x02U
-#define ADS1220_CMD_READDATA        0x10U
-#define ADS1220_REGISTER_COUNT      4U
-#define ADS1220_SPI_TIMEOUT_MS      100U
+#define ADS1220_CMD_RESET               0x06U
+#define ADS1220_CMD_START_SYNC          0x08U
+#define ADS1220_CMD_POWERDOWN           0x02U
+#define ADS1220_CMD_READDATA            0x10U
+#define ADS1220_REGISTER_COUNT          4U
+#define ADS1220_SPI_TIMEOUT_MS          100U
 
-#define ADS1220_CMD_WRITE_REGISTER  0x40U
-#define ADS1220_REG_CONFIG_0        0x00U
-#define ADS1220_MUX_MASK            0xF0U
-#define ADS1220_MUX_AIN0_AIN1       0x00U
-#define ADS1220_MUX_AIN2_AIN3       0x30U
+#define ADS1220_CMD_WRITE_REGISTER      0x40U
+#define ADS1220_REG_CONFIG_0            0x00U
+#define ADS1220_MUX_MASK                0xF0U
+#define ADS1220_MUX_AIN0_AIN1           0x00U
+#define ADS1220_MUX_AIN2_AIN3           0x30U
 
-
+#define ADS1220_REFERENCE_VOLTAGE_V     2.048f
+#define ADS1220_FULL_SCALE_COUNTS       8388608.0f
+#define ADS1220_GAIN                    1.0f
 
 // Pointer to the SPI peripheral supplied by ads1220_init().
 // For this project, it will point to hspi3.
@@ -545,52 +547,11 @@ bool ads1220_wait_drdy(uint32_t timeout_ms)
 
 
 /*
-ads1220_read_raw() function does the following:
+ads1220_readraw24bit_generate32bitsigned() function does the following:
 1. sends the READY DATA command, 
 2. reads the three-byte ADS1220 conversion result
 3. converts it into a signed 32-bit integer.
 */
-
-
-
-
-
-
-
-
-
-
-
-
-
-static int32_t ads1220_combine_bytes(const uint8_t data[3])
-{
-    uint32_t raw_code;
-
-    /*
-     * Place the three ADS1220 bytes in their correct positions:
-     *
-     * data[0] → bits 23–16
-     * data[1] → bits 15–8
-     * data[2] → bits 7–0
-     */
-    raw_code = ((uint32_t)data[0] << 16)
-             | ((uint32_t)data[1] << 8)
-             |  (uint32_t)data[2];
-
-    int32_t signed_code;
-    if ((raw_code & 0x00800000U) != 0U)
-    {
-        signed_code = (int32_t)(raw_code - 0x01000000U);
-    }
-    else
-    {
-        signed_code = (int32_t)raw_code;
-    }
-
-    return signed_code;
-}
-
 
 /*
 Read, combine, and make a singed 32bit output from the latest ADS1220 24 bit singed conversion result.
@@ -648,25 +609,25 @@ bool ads1220_readraw24bit_generate32bitsigned(int32_t *raw_code)
 
     /*
      Combine the three received bytes into one 24-bit value:
-     
      byte 0 -> bits 23-16
      byte 1 -> bits 15-8
      byte 2 -> bits 7-0
-     */
+    */
+
     combined_code =  ((uint32_t)received_data[0] << 16U) |
                      ((uint32_t)received_data[1] << 8U)  |  
                      (uint32_t)received_data[2];
 
     /*
-     The ADS1220 uses signed 24-bit two's-complement format.
+     The ADS1220 uses signed 24-bit two's-complement format to measure differential voltage.
 
      singed 24 bit two's complement rule:
      if bit 23 is 0 ---> singed value =        original number
      if bit 23 is 1 ---> singed value = 2^24 - original number
 
      Example:     24 bit number:  FF FF FF = 16,777,215 ---> bit 23 is 1 ---> singed value= 2^24 - 16,777,215 = -1
+    */
 
-     */
     if ((combined_code & 0x00800000U) != 0U) // bit 23 is 1
     {
         *raw_code =  (int32_t)combined_code - (int32_t)0x01000000;
@@ -680,7 +641,30 @@ bool ads1220_readraw24bit_generate32bitsigned(int32_t *raw_code)
 }
 
 
+/*
+ Convert a signed ADS1220 raw code to differential voltage.
+ 
+ Assumptions:
+     Internal reference = 2.048 V
+     Gain               = 1
+ 
+ The result represents:
+     voltage difference AINP - AINN
+ */
+float ads1220_rawconversion_to_voltage(int32_t raw_code)
+{
+    float voltage;
+
+    voltage = ((float)raw_code / ADS1220_FULL_SCALE_COUNTS ) *  (ADS1220_REFERENCE_VOLTAGE_V / ADS1220_GAIN);
+
+    return voltage;
+}
+
+
+
+
+
 
 // bool ads1220_wait_drdy(uint32_t timeout_ms);
-// bool ads1220_read_raw(int32_t *raw_code);
+// bool ads1220_readraw24bit_generate32bitsigned(int32_t *raw_code);
 // float ads1220_code_to_voltage(int32_t raw_code);

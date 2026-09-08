@@ -44,6 +44,7 @@ bool ads1220_wait_drdy(uint32_t timeout_ms);
 
 bool ads1220_read_raw24bit_generate_32bit(int32_t *raw_code);
 
+float ads1220_code_to_voltage(int32_t raw_code);
 
 
 #endif
