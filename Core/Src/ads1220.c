@@ -4,14 +4,15 @@
 #include <stdint.h>
 
 /*=================================================== Start of comment section =========================================================*/
-//========================== Communication method for ADS1220 (24 bit analogue digital converter component (ADC)) =======================
+//========================== Communication method for ADS1220 , 24 bit analogue digital converter component (ADC) =======================
 
 /*
-ADS1220 reads the voltage difference across the cable threads and across the 200 Ohm precision resistor.
+ADS1220 component reads the voltage difference across the cable threads and across the 200 Ohm precision resistor.
 Voltage readings are used to caclulate the current the goes through the cable thread and then calculate the resistance of the cable thread.
 
-STM32 commnicates to the ADS1220 through SPI.
+STM32 communicates to the ADS1220 through SPI.
 Note: commands required to write and read registers are different from the commands required to read voltage conversion results.
+Note: In the comments below, CS means chip select and N means active low. example: ADC_CS_N_Pin --> GPIO pin to enable ADC with active low signal
 
 Sequence of communication:
 1. First we write into registers to determine what ADC channels (AIN 0-1 , AIN 2-3) to use and what the reading speed is.
@@ -77,7 +78,7 @@ The sequence to read the voltage conversion from each input pair (AIN 0-1, AIN 2
 1. Write the input selection into configuration register 0.
 2. Send START/SYNC.
 3. Wait for DRDY to become low.
-4. Send READYDATA command.
+4. Send DATA READY command.
 5. Read three conversion bytes.
 6. If the result is wrong? Then  read again.
 */
@@ -439,7 +440,6 @@ bool ads1220_init(SPI_HandleTypeDef *hspi)
 }
 
 
-
 /*
  Select the ADS1220 differential input pair.
  AIN0 - AIN1: cable voltage
@@ -505,49 +505,51 @@ bool ads1220_start_conversion(void){
 
 
 
-// bool ads1220_wait_drdy(uint32_t timeout_ms);
-// bool ads1220_read_raw(int32_t *raw_code);
-// float ads1220_code_to_voltage(int32_t raw_code);
+/*
+Wait for the ADS1220 conversion to complete.
+
+ADC_DRDY_N is active-low:
+     HIGH = conversion is still running
+     LOW  = conversion result is ready
+ 
+ timeout_ms:
+     Maximum time to wait in milliseconds.
+
+ Returns:
+    true  when DRDY becomes LOW.
+    false when the timeout expires.
+ */
+bool ads1220_wait_drdy(uint32_t timeout_ms)
+{
+    uint32_t start_time;
+    start_time = HAL_GetTick();  //returns the number of milliseconds elapsed since the STM32 HAL time started during HAL_Init()
+
+    // Continue waiting while DRDY remains HIGH.
+    while (HAL_GPIO_ReadPin(ADC_DRDY_N_GPIO_Port, ADC_DRDY_N_Pin) == GPIO_PIN_SET)
+    {
+        // Unsigned subtraction keeps this timeout calculation valid even when HAL_GetTick() wraps around when it reaches 2^32-1.
+        // The wrap around happens when HAL_GetTick() is 4 294 967 295 but C calculcates the diffrence correctly for unsigned uint32_t.
+        // 4 294 967 295 is about 49.71 days.  Every tick in HAL_GetTick()  represents 1 ms.
+        if ((HAL_GetTick() - start_time) >= timeout_ms)
+        {
+            return false;
+        }
+
+        // Avoid repeatedly polling the pin at full CPU speed
+        HAL_Delay(1U);
+    }
+
+    return true;
+}
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/*
+ads1220_read_raw() function does the following:
+1. sends the READY DATA command, 
+2. reads the three-byte ADS1220 conversion result
+3. converts it into a signed 32-bit integer.
+*/
 
 
 
@@ -576,8 +578,6 @@ static int32_t ads1220_combine_bytes(const uint8_t data[3])
              | ((uint32_t)data[1] << 8)
              |  (uint32_t)data[2];
 
-
-
     int32_t signed_code;
     if ((raw_code & 0x00800000U) != 0U)
     {
@@ -590,3 +590,97 @@ static int32_t ads1220_combine_bytes(const uint8_t data[3])
 
     return signed_code;
 }
+
+
+/*
+Read, combine, and make a singed 32bit output from the latest ADS1220 24 bit singed conversion result.
+The ADS1220 returns a signed 24-bit value as three bytes:
+received_data[0] = bits 23-16
+received_data[1] = bits 15-8
+received_data[2] = bits 7-0
+ */
+
+//*raw_code  is the address where the 32bit signed output is saved.
+bool ads1220_readraw24bit_generate32bitsigned(int32_t *raw_code)
+{
+    uint8_t command;
+    uint8_t received_data[3];
+    uint32_t combined_code;
+    HAL_StatusTypeDef hal_status;
+
+    //Verify that the caller supplied a valid destination.
+    if (raw_code == NULL)
+    {
+        return false;
+    }
+
+
+    // Verify that ads1220_init() previously received and saved a valid SPI handle outside the function.
+    if (ads1220_spi == NULL)
+    {
+        return false;
+    }
+
+    command = ADS1220_CMD_READDATA;
+
+    ads1220_select();
+
+
+    // Send the READ DATA command  0x10
+    hal_status = HAL_SPI_Transmit( ads1220_spi,  &command,  1U,  ADS1220_SPI_TIMEOUT_MS);
+
+   
+    //Keep ADC_CS_N low and read all three conversion bytes.
+    if (hal_status == HAL_OK){
+
+        hal_status = HAL_SPI_Receive( ads1220_spi,  received_data, 3U,  ADS1220_SPI_TIMEOUT_MS);
+    }
+
+   
+    // End the SPI transaction regardless of whether it succeeded.
+    ads1220_deselect();
+
+
+    if (hal_status != HAL_OK)
+    {
+        return false;
+    }
+
+    /*
+     Combine the three received bytes into one 24-bit value:
+     
+     byte 0 -> bits 23-16
+     byte 1 -> bits 15-8
+     byte 2 -> bits 7-0
+     */
+    combined_code =  ((uint32_t)received_data[0] << 16U) |
+                     ((uint32_t)received_data[1] << 8U)  |  
+                     (uint32_t)received_data[2];
+
+    /*
+     The ADS1220 uses signed 24-bit two's-complement format.
+
+     singed 24 bit two's complement rule:
+     if bit 23 is 0 ---> singed value =        original number
+     if bit 23 is 1 ---> singed value = 2^24 - original number
+
+     Example:     24 bit number:  FF FF FF = 16,777,215 ---> bit 23 is 1 ---> singed value= 2^24 - 16,777,215 = -1
+
+     */
+    if ((combined_code & 0x00800000U) != 0U) // bit 23 is 1
+    {
+        *raw_code =  (int32_t)combined_code - (int32_t)0x01000000;
+    }
+    else
+    {
+        *raw_code =  (int32_t)combined_code;
+    }
+
+    return true;
+}
+
+
+
+// bool ads1220_wait_drdy(uint32_t timeout_ms);
+// bool ads1220_read_raw(int32_t *raw_code);
+// float ads1220_code_to_voltage(int32_t raw_code);

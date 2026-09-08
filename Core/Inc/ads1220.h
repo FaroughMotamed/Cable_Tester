@@ -40,6 +40,10 @@ bool ads1220_select_input(ads1220_input_type input);
 
 bool ads1220_start_conversion(void);
 
+bool ads1220_wait_drdy(uint32_t timeout_ms);
+
+bool ads1220_read_raw24bit_generate_32bit(int32_t *raw_code);
+
 
 
 #endif
