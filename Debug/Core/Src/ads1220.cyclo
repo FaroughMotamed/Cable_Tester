@@ -1,8 +1,0 @@
-../Core/Src/ads1220.c:50:13:ads1220_select	1
-../Core/Src/ads1220.c:57:13:ads1220_deselect	1
-../Core/Src/ads1220.c:64:13:ads1220_send_command	2
-../Core/Src/ads1220.c:86:13:ads1220_write_registers	3
-../Core/Src/ads1220.c:142:13:ads1220_read_registers	4
-../Core/Src/ads1220.c:205:13:ads1220_registers_match	3
-../Core/Src/ads1220.c:219:6:ads1220_init	6
-../Core/Src/ads1220.c:333:16:ads1220_combine_bytes	2

@@ -29,11 +29,4 @@
 		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
 		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
 	</natures>
-	<linkedResources>
-		<link>
-			<name>Drivers/BSP/STM32G4xx_Nucleo/stm32g4xx_nucleo.c</name>
-			<type>1</type>
-			<locationURI>PARENT-3-PROJECT_LOC/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Drivers/BSP/STM32G4xx_Nucleo/stm32g4xx_nucleo.c</locationURI>
-		</link>
-	</linkedResources>
 </projectDescription>

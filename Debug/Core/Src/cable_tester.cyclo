@@ -1,3 +1,0 @@
-../Core/Src/cable_tester.c:5:14:enter_safe_state	1
-../Core/Src/cable_tester.c:77:6:set_indicator_mode	9
-../Core/Src/cable_tester.c:127:6:cable_tester_init	1
