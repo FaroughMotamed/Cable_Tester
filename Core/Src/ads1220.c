@@ -174,9 +174,9 @@ HAL_SPI_Transmit(  ads1220_spi   ,     select_ain0_ain1           ,    2U       
 #define ADS1220_REG_CONFIG_0            0x00U
 #define ADS1220_MUX_MASK                0xF0U
 #define ADS1220_MUX_AIN0_AIN1           0x00U
-#define ADS1220_MUX_AIN2_AIN3           0x30U
+#define ADS1220_MUX_AIN2_AIN3           0x50U
 
-#define ADS1220_REFERENCE_VOLTAGE_V     2.048f
+#define ADS1220_REFERENCE_VOLTAGE_V     4.096f
 #define ADS1220_FULL_SCALE_COUNTS       8388608.0f
 #define ADS1220_GAIN                    1.0f
 
@@ -645,7 +645,7 @@ bool ads1220_readraw24bit_generate32bitsigned(int32_t *raw_code)
  Convert a signed ADS1220 raw code to differential voltage.
  
  Assumptions:
-     Internal reference = 2.048 V
+     Internal reference = 4.096 V
      Gain               = 1
  
  The result represents:
@@ -659,9 +659,6 @@ float ads1220_rawconversion_to_voltage(int32_t raw_code)
 
     return voltage;
 }
-
-
-
 
 
 
