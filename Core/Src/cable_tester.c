@@ -1,7 +1,8 @@
-
+#include <stdbool.h>
+#include <stdint.h>
 #include "main.h"
+#include "ads1220.h"
 #include "cable_tester.h"
-#include <stdio.h>
 
 
   // Different paramters used for disabling the muxes are defined in the main.h
@@ -147,6 +148,9 @@ void set_indicator_mode(indicator_mode mode)
 
 
 
+
+
+
 // Define the cable_tester_init
 void cable_tester_init(void)
 {
@@ -168,4 +172,88 @@ Enter READY state
 */
 
 }
+
+
+/*
+ Measure the voltage across the cable.
+ AIN0 is the positive input.
+ AIN1 is the negative input.
+ cable_voltage receives AIN0 - AIN1 in volts.
+ */
+bool measure_cable_voltage(float *cable_voltage){
+
+  bool output= ads1220_measure_input(ADS1220_CABLE_SELECT, cable_voltage);
+  return output;
+}
+
+
+
+/*
+ Measure the voltage across the 200.0 ohm resistor;
+ AIN2 is the positive input.
+ AIN3 is the negative input.
+ sense_voltage receives AIN2 - AIN3 in volts.
+*/
+bool measure_sense_voltage(float *sense_voltage){
+
+  bool output= ads1220_measure_input(ADS1220_RESISTOR_SELECT, sense_voltage);
+  return output;
+}
+
+
+// Determine cable presence from the sense-resistor voltage.
+// open cable generates no current and no voltage difference across resistor.
+// closed cable generates 2.048V/200 ohm=10.24 mA current and 2.028 Voltage differnece.
+// True meanscables present, False means there is no cable. 
+
+#define CABLE_PRESENT_SENSE_THRESHOLD_V     1.500f
+#define SENSE_VOLTAGE_MAXIMUM_V             2.500f
+
+// Determine cable presence from the sense-resistor voltage.
+// open cable generates no current and no voltage difference across resistor.
+// closed cable generates 2.048V/200 ohm=10.24 mA current and 2.048 Voltage differnece.
+
+// ads1220 fault, cable open: false
+// cable close: true
+bool check_cable_presence()
+{
+    float sense_voltage;
+
+    // Measure AIN2 - AIN3 across the 200-ohm resistor.
+    if (!measure_sense_voltage(&sense_voltage))
+    {
+        return false;
+    }
+
+    // A negative voltage or an unexpectedly high voltage
+    // indicates a wiring, polarity or current-source problem.
+    if ((sense_voltage < 0.0f) || (sense_voltage > SENSE_VOLTAGE_MAXIMUM_V))
+    {
+        return false;
+    }
+
+    /*
+     A closed cable path should allow the constant current
+     to flow, producing approximately 2.048 V across the
+     200-ohm resistor.
+     */
+    if (sense_voltage >= CABLE_PRESENT_SENSE_THRESHOLD_V)
+    {
+        //*status = CABLE_PRESENT;
+        return true;
+    }
+    else
+    {
+        //*status = CABLE_NOT_PRESENT;
+        return false;
+    }
+}
+
+
+
+
+
+
+
+
 

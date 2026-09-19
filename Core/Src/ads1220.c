@@ -81,6 +81,20 @@ The sequence to read the voltage conversion from each input pair (AIN 0-1, AIN 2
 4. Send DATA READY command.
 5. Read three conversion bytes.
 6. If the result is wrong? Then  read again.
+
+    Select input pair
+        ↓
+    Write ADS1220 register 0
+        ↓
+    Send START/SYNC
+        ↓
+    Wait for DRDY LOW
+        ↓
+    Send READY DATA
+        ↓
+    Read three bytes
+        ↓
+    Convert signed raw code to volts
 */
 
 /*
@@ -562,7 +576,7 @@ received_data[2] = bits 7-0
  */
 
 //*raw_code  is the address where the 32bit signed output is saved.
-bool ads1220_readraw24bit_generate32bitsigned(int32_t *raw_code)
+bool ads1220_readraw24bit_to_32bit(int32_t *raw_code)
 {
     uint8_t command;
     uint8_t received_data[3];
@@ -651,7 +665,7 @@ bool ads1220_readraw24bit_generate32bitsigned(int32_t *raw_code)
  The result represents:
      voltage difference AINP - AINN
  */
-float ads1220_rawconversion_to_voltage(int32_t raw_code)
+float ads1220_code_to_voltage(int32_t raw_code)
 {
     float voltage;
 
@@ -661,6 +675,51 @@ float ads1220_rawconversion_to_voltage(int32_t raw_code)
 }
 
 
-// bool ads1220_wait_drdy(uint32_t timeout_ms);
-// bool ads1220_readraw24bit_generate32bitsigned(int32_t *raw_code);
-// float ads1220_code_to_voltage(int32_t raw_code);
+/* ads1220_measure_input() checks the output pointer,
+selects AIN0-AIN1/AIN2-AIN3, starts the conversion, 
+waits for DRDY, reads the raw result and converts it to volts.
+*/
+bool ads1220_measure_input(ads1220_input_type input, float *voltage)
+{
+    int32_t raw_code;
+
+     // Verify that the caller provided a valid location for storing the measured voltage.
+    if (voltage == NULL)
+    {
+        return false;
+    }
+
+    // Select the required differential input:
+    if (!ads1220_select_input(input))
+    {
+        return false;
+    }
+
+    
+    // Start one conversion. The ADS1220 is configured for single measurement.
+    if (!ads1220_start_conversion())
+    {
+        return false;
+    }
+
+    // Wait until DRDY becomes LOW. Return false if conversion does not complete.
+    if (!ads1220_wait_drdy(ADS1220_SPI_TIMEOUT_MS))
+    {
+        return false;
+    }
+
+
+    //Read the signed 24-bit conversion result and sign-extend it into a signed 32-bit integer.
+    if (!ads1220_read_raw24bit_to_32bit(&raw_code))
+    {
+        return false;
+    }
+
+
+    // Convert the raw ADC result to differential voltage. 
+    // Store the result into a pointer to be used by other parts of the code.
+    *voltage = ads1220_code_to_voltage(raw_code);
+
+    return true;
+}
+
