@@ -55,8 +55,8 @@ Example register configuration used by the cable tester.
             Temperature sensor disabled
             Burnout current sources disabled
 
-    Register 2 = 0x00
-            Internal 2.048 V reference
+    Register 2 = 0x40
+            External  reference (4.0496 V)
             Low-side power switch open
             IDAC current sources disabled
 
@@ -355,8 +355,8 @@ Register 1 = 0x20
         Temperature sensor disabled
         Burnout current sources disabled
 
-Register 2 = 0x00
-        Internal 2.048 V reference
+Register 2 = 0x40
+        External 2.048 V reference
         Low-side power switch open
         IDAC current sources disabled
 
@@ -368,7 +368,7 @@ static const uint8_t ads1220_configuration[ADS1220_REGISTER_COUNT] =
 {
     0x01U,
     0x20U,
-    0x00U,
+    0x40U,
     0x00U
 };
 
@@ -659,7 +659,6 @@ float ads1220_rawconversion_to_voltage(int32_t raw_code)
 
     return voltage;
 }
-
 
 
 // bool ads1220_wait_drdy(uint32_t timeout_ms);

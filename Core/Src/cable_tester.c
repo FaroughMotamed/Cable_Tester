@@ -1,6 +1,7 @@
 
 #include "main.h"
 #include "cable_tester.h"
+#include <stdio.h>
 
 
   // Different paramters used for disabling the muxes are defined in the main.h
