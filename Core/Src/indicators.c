@@ -6,29 +6,29 @@
 1. A firmware event occurs.
 2. indicator_start_pattern()
 3. indicator_stop_pattern()
-    Stops and clears any existing pattern.
+    - Stops and clears any existing pattern.
 4. indicator_turn_off_all_leds()
-    Turns off the blue, green and red LEDs.
+    - Turns off the blue, green and red LEDs.
 5. indicator_turn_on_selected_led()
 6. indicator_set_pattern_output(true)
-    Starts the first ON phase.
-    Turns on the selected LED.
-    Turns on the buzzer if enabled.
+    - Starts the first ON phase.
+    - Turns on the selected LED.
+    - Turns on the buzzer if enabled.
 7. indicator_process()
-    Called continuously from the main loop.
-    Checks total pattern time and current phase time.
+    - Called continuously from the main loop.
+    - Checks total pattern time and current phase time.
 8. indicator_set_pattern_output(false)
-    Called when the ON duration expires.
-    Turns off the LED and buzzer.
+    - Called when the ON duration expires.
+    - Turns off the LED and buzzer.
 9. indicator_set_pattern_output(true)
-    Called when the OFF duration expires.
-    Starts the next ON phase.
+    - Called when the OFF duration expires.
+    - Starts the next ON phase.
 10. indicator_process()
-    Continues alternating between ON and OFF phases.
+    - Continues alternating between ON and OFF phases.
 11. indicator_stop_pattern()
-    Called when total pattern duration expires.
-    Turns off the LED and buzzer.
-    Marks the pattern inactive.
+    - Called when total pattern duration expires.
+    - Turns off the LED and buzzer.
+    - Marks the pattern inactive.
 */
 
 
