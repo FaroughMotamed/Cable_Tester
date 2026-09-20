@@ -209,19 +209,29 @@ bool measure_sense_voltage(float *sense_voltage){
 #define CABLE_PRESENT_SENSE_THRESHOLD_V     1.500f
 #define SENSE_VOLTAGE_MAXIMUM_V             2.500f
 
+typedef enum{
+CABLE_PRESENT =0, 
+CABLE_NOT_PRESENT = 1,
+ADS1220_FAULT=2,
+FALSE_MEASUREMENT=3
+} cable_presence_status_t;
+
+#define CABLE_PRESENCE_CHECK_INTERVAL_MS  100.0f
+
 // Determine cable presence from the sense-resistor voltage.
 // open cable generates no current and no voltage difference across resistor.
 // closed cable generates 2.048V/200 ohm=10.24 mA current and 2.048 Voltage differnece.
 
 // ads1220 fault, cable open: false
 // cable close: true
-bool check_cable_presence()
+bool check_cable_presence(cable_presence_status_t *status)
 {
     float sense_voltage;
 
     // Measure AIN2 - AIN3 across the 200-ohm resistor.
     if (!measure_sense_voltage(&sense_voltage))
     {
+        status = ADS1220_FAULT;
         return false;
     }
 
@@ -229,6 +239,7 @@ bool check_cable_presence()
     // indicates a wiring, polarity or current-source problem.
     if ((sense_voltage < 0.0f) || (sense_voltage > SENSE_VOLTAGE_MAXIMUM_V))
     {
+        status = FALSE_MEASUREMENT;
         return false;
     }
 
@@ -236,19 +247,165 @@ bool check_cable_presence()
      A closed cable path should allow the constant current
      to flow, producing approximately 2.048 V across the
      200-ohm resistor.
-     */
+    */
     if (sense_voltage >= CABLE_PRESENT_SENSE_THRESHOLD_V)
     {
-        //*status = CABLE_PRESENT;
+        status = CABLE_PRESENT;
         return true;
     }
     else
     {
-        //*status = CABLE_NOT_PRESENT;
+        status = CABLE_NOT_PRESENT;
         return false;
     }
 }
 
+
+
+typedef enum
+{
+    TESTER_STATE_INIT = 0,
+    TESTER_STATE_READY,
+    TESTER_STATE_TESTING,
+    TESTER_STATE_RESULTS,
+    TESTER_STATE_CALIBRATION,
+    TESTER_STATE_ERROR
+
+} cable_tester_state_t;
+
+
+
+/*
+ Periodically check whether a cable is present.
+ This check only happens in TESTER_STATE_READY.
+
+ This function should be called repeatedly from
+ cable_tester_process() or from the main loop.
+ 
+ A new cable-presence measurement is performed:
+     1. Only when presence_check_allowed is true.
+     2. Immediately on the first allowed call.
+     3. Once every 100 ms after the first check.
+ 
+ The function does not block the main loop by using HAL_Delay(100). 
+ If 100 ms has not elapsed, it immediately returns the previously saved
+ cable-presence result.
+ 
+ Parameters:
+     presence_check_allowed:
+         true  = background presence measurement is allowed.
+         false = do not access the ADS1220 or measurement path.
+
+     status:
+         Receives the most recent detailed status:
+             CABLE_PRESENT
+             CABLE_NOT_PRESENT
+             ADS1220_FAULT
+             FALSE_MEASUREMENT
+ 
+     new_result_f:
+         Receives true when a new ADS1220 measurement was performed during this function call.
+         Receives false when the function only returned the previously stored result.
+ 
+ Return value:
+     true:
+         The most recent result indicates that a cable is present.
+ 
+     false:
+         The cable is absent, an ADS1220 failure occurred,
+         the measurement was invalid, or an argument was invalid.
+
+ Important:
+     The Boolean return value only answers whether a cable is
+     present. Check *status to distinguish an open cable from
+     a measurement or ADS1220 fault.
+ */
+
+bool cable_presence_process( bool presence_check_allowed, cable_presence_status_t *status, bool *new_result_f)
+{
+  
+    // Time at which the previous presence measurement started.
+    //  Static variable retain its value between calls.
+    static uint32_t previous_check_time_ms = 0U;
+
+    // Most recently determined cable status.
+    static cable_presence_status_t previous_status = CABLE_NOT_PRESENT;
+
+    //Boolean form of the most recent cable-presence result.
+    static bool previous_cable_presence = false;
+
+    // This causes the first allowed check to happen immediately,
+    // without waiting for the initial 100-ms interval.
+    static bool first_check_required = true;
+
+    uint32_t current_time_ms;
+
+    //The function cannot return detailed information if either output pointer is invalid.
+    if ((status == NULL) || (new_result_f == NULL))
+    {
+        return false;
+    }
+
+    // Unless a measurement is performed below, this call has not produced a new result.
+    *new_result_f = false;
+
+    // Initially return the status saved from the previous measurement.
+    *status = previous_status;
+
+    /*
+     Do not access the ADS1220 unless presence checking is
+     permitted by the cable tester state machine.
+     
+     This prevents the background presence check from
+     interfering with initialization, testing, calibration,
+     results processing or error handling.
+    */
+    if (!presence_check_allowed)
+    {
+        return previous_cable_presence;
+    }
+
+    // Obtain the number of milliseconds elapsed since HAL_Init().
+    current_time_ms = HAL_GetTick();
+
+    /*
+     After the first measurement, wait until at least 100 ms
+     has elapsed before starting another presence measurement.
+     
+     This is not a blocking wait. If 100 ms has not elapsed,
+     the function immediately returns the cached result.
+     
+     Unsigned subtraction remains valid if HAL_GetTick() wraps around.
+     */
+    if ( !first_check_required &&  ( (current_time_ms - previous_check_time_ms) <  CABLE_PRESENCE_CHECK_INTERVAL_MS) )
+    {
+        return previous_cable_presence;
+    }
+
+    /*
+     A new measurement is about to begin.
+     Save its starting time so another background check will not begin for at least 100 ms.
+    */
+    previous_check_time_ms = current_time_ms;
+    first_check_required = false;
+
+    /*
+     Perform the actual ADS1220 cable-presence measurement.
+     This updates both:
+         previous_cable_presence
+         previous_status
+    */
+    previous_cable_presence = check_cable_presence(&previous_status);
+
+    // Copy the newly calculated status to the caller.
+    *status = previous_status;
+
+    // Tell the caller that a new measurement was completed during this call. (even if the measurement failed)
+    *new_result_f = true;
+
+     //Return true only when the most recent measurement indicates that a cable is present.
+    return previous_cable_presence;
+}
 
 
 

@@ -89,7 +89,10 @@ bool measure_sense_voltage(float *sense_voltage);
 
 // ads1220 fault, cable open: false
 // cable close: true
-bool check_cable_presence();
+bool check_cable_presence(void);
+
+
+bool cable_presence_process( bool presence_check_allowed, cable_presence_status_t *status, bool *new_result)
 
 
 
