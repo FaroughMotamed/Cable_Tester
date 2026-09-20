@@ -53,7 +53,7 @@ bool indicator_start_pattern(indicator_led_t led,   bool beep_enabled,
 
 
 
-// Call continuously from the main loop.
+// Call continuously from the main loop to process the indicator.
 void indicator_process(void);
 
 // Immediately stop the current pattern.
@@ -63,3 +63,4 @@ void indicator_stop_pattern(void);
 bool indicator_pattern_is_active(void);
 
 #endif /* INDICATORS_H */
+

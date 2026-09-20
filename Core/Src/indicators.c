@@ -1,24 +1,125 @@
-
-
-
 #include "indicators.h"
 #include "main.h"
 
-#define INDICATOR_MAXIMUM_TOTAL_DURATION_MS  30000U
+// Sequence of events.
+/*
+1. A firmware event occurs.
+2. indicator_start_pattern()
+3. indicator_stop_pattern()
+    Stops and clears any existing pattern.
+4. indicator_turn_off_all_leds()
+    Turns off the blue, green and red LEDs.
+5. indicator_turn_on_selected_led()
+6. indicator_set_pattern_output(true)
+    Starts the first ON phase.
+    Turns on the selected LED.
+    Turns on the buzzer if enabled.
+7. indicator_process()
+    Called continuously from the main loop.
+    Checks total pattern time and current phase time.
+8. indicator_set_pattern_output(false)
+    Called when the ON duration expires.
+    Turns off the LED and buzzer.
+9. indicator_set_pattern_output(true)
+    Called when the OFF duration expires.
+    Starts the next ON phase.
+10. indicator_process()
+    Continues alternating between ON and OFF phases.
+11. indicator_stop_pattern()
+    Called when total pattern duration expires.
+    Turns off the LED and buzzer.
+    Marks the pattern inactive.
+*/
 
+
+#define INDICATOR_MAXIMUM_TOTAL_DURATION_MS  30000U
 
 // Current pattern configuration.
 static indicator_led_t active_led = INDICATOR_LED_NONE;
 
+/*
+ Indicates whether an LED/buzzer pattern is currently running.
+ false:  
+ No pattern is active. indicator_process() has nothing to do.
+
+ true:
+     A pattern has started and indicator_process() must continue checking its ON/OFF and total-duration timers.
+ */
 static bool pattern_active = false;
+
+
+/*
+ Records whether the pattern is currently in its ON phase or its OFF phase.
+ 
+ false: The selected LED and buzzer are currently off.
+ true: The selected LED and optional buzzer are currently on.
+ 
+ indicator_process() uses this variable to determine whether
+ it should compare elapsed time against pattern_on_duration_ms
+ or pattern_off_duration_ms.
+ */
 static bool pattern_output_is_on = false;
+
+
+/*
+ Records whether the buzzer should follow the LED pattern.
+ 
+ false:  Only the selected LED blinks. The buzzer remains off.
+ true: The buzzer turns on and off at the same time as the LED.
+ 
+ This value is set from the beep_enabled argument passed into
+ indicator_start_pattern().
+*/
 static bool pattern_beep_enabled = false;
 
+
+/*
+ Stores the HAL tick value at which the complete indicator pattern started.
+ 
+ It is used to calculate how long the complete pattern has
+ been running:   HAL_GetTick() - pattern_start_time_ms
+ When this elapsed time reaches pattern_total_duration_ms,
+ the entire pattern is stopped.
+ */
 static uint32_t pattern_start_time_ms = 0U;
+
+
+/*
+ Stores the HAL tick value at which the current ON or OFF
+ phase started.
+ 
+ It is used to calculate how long the current phase has been
+ running:   HAL_GetTick() - phase_start_time_ms
+ This value is updated every time the pattern changes:  ON  -> OFF, OFF -> ON
+ */
 static uint32_t phase_start_time_ms = 0U;
 
+
+
+// Stores how many milliseconds the selected LED and buzzer remain on during each pulse.
 static uint32_t pattern_on_duration_ms = 0U;
+
+
+/*
+ Stores how many milliseconds the selected LED and buzzer remain off between pulses.
+ A value of zero means that is no repeating OFF/ON cycle and the pattern acts as one                                                        
+ continuous pulse until the total duration expires.
+ */
 static uint32_t pattern_off_duration_ms = 0U;
+
+
+/*
+ Stores the total duration of the complete indicator pattern.
+ This includes every ON and OFF phase.
+ Example:
+     ON duration    = 200 ms
+     OFF duration   = 300 ms
+     Total duration = 3000 ms
+ 
+ The LED and  buzzer alternate between ON and OFF
+ for up to 3000 ms. After that, indicator_process() switches
+ everything off and marks the pattern inactive.
+ */
 static uint32_t pattern_total_duration_ms = 0U;
 
 
