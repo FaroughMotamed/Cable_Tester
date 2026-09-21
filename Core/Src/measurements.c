@@ -5,12 +5,19 @@
 #include <stddef.h>
 
 
-
 // Precision sense resistor used by the current source.
 #define SENSE_RESISTOR_OHMS             200.0f
 
 // Maximum reasonable voltage across the sense resistor.
 #define SENSE_VOLTAGE_MAXIMUM_V         2.5f
+
+
+// The current is about 10.24 mA. The below threshold is only to prevetn division be zero.
+#define MINIMUM_TEST_CURRENT_A       0.001f
+
+// Highest resistance accepted by this device.
+// The theoretical calculation is around 100 ohm.
+#define MAXIMUM_RESISTANCE_OHMS      200.0f
 
 
 /*
@@ -121,4 +128,51 @@ bool calculate_test_current(float sense_voltage, float *test_current)
 
     return true;
 }
+
+// Apply Ohm's law: R = V / I for the cable.
+bool calculate_resistance(float cable_voltage, float test_current, float *resistance_ohms)
+{
+    float calculated_resistance;
+
+    // Verify that the caller provided a valid output address.
+    if (resistance_ohms == NULL)
+    {
+        return false;
+    }
+
+    // Start with a safe output value.
+    *resistance_ohms = 0.0f;
+
+    // A negative cable voltage is not valid for this circuit.
+    if (cable_voltage < 0.0f)
+    {
+        return false;
+    }
+
+    /*
+    Do not divide by zero or by a very small current.
+
+    A very small current normally means that the cable is open,
+    the current source is not operating, or the measurement is invalid.
+    */
+    if (test_current < MINIMUM_TEST_CURRENT_A)
+    {
+        return false;
+    }
+
+    // Apply Ohm's law: R = V / I.
+    calculated_resistance = cable_voltage / test_current;
+
+    // Reject a result outside the supported resistance range.
+    if (calculated_resistance > MAXIMUM_RESISTANCE_OHMS)
+    {
+        return false;
+    }
+
+    // Copy the valid result to the caller.
+    *resistance_ohms = calculated_resistance;
+
+    return true;
+}
+
 
