@@ -150,9 +150,9 @@ bool calculate_resistance(float cable_voltage, float test_current, float *resist
     }
 
     /*
-    Do not divide by zero or by a very small current.
+    prevent division by zero or by a very small current.
 
-    A very small current normally means that the cable is open,
+    A very small current means that the cable is open,
     the current source is not operating, or the measurement is invalid.
     */
     if (test_current < MINIMUM_TEST_CURRENT_A)
@@ -160,7 +160,7 @@ bool calculate_resistance(float cable_voltage, float test_current, float *resist
         return false;
     }
 
-    // Apply Ohm's law: R = V / I.
+    // R = V / I.
     calculated_resistance = cable_voltage / test_current;
 
     // Reject a result outside the supported resistance range.
@@ -170,6 +170,54 @@ bool calculate_resistance(float cable_voltage, float test_current, float *resist
     }
 
     // Copy the valid result to the caller.
+    *resistance_ohms = calculated_resistance;
+
+    return true;
+}
+
+
+// Do a measure_resistance
+bool measure_resistance(float *resistance_ohms)
+{
+    float cable_voltage;
+    float sense_voltage;
+    float test_current;
+    float calculated_resistance;
+
+    // Verify that the caller provided a valid output address.
+    if (resistance_ohms == NULL)
+    {
+        return false;
+    }
+
+    // Start with a safe output value.
+    *resistance_ohms = 0.0f;
+
+    /*
+    Measure both ADS1220 input pairs:
+
+    AIN0 - AIN1 measures the DUT or cable voltage.
+    AIN2 - AIN3 measures the voltage across the 200-ohm
+    current-sense resistor.
+    */
+    if (!measure_voltages(&cable_voltage, &sense_voltage))
+    {
+        return false;
+    }
+
+    // Calculate the test current from the sense-resistor voltage.
+    if (!calculate_test_current(sense_voltage, &test_current))
+    {
+        return false;
+    }
+
+    // Apply Ohm's law to calculate the DUT resistance.
+    if (!calculate_resistance(cable_voltage, test_current, &calculated_resistance))
+    {
+        return false;
+    }
+
+    // Copy the valid resistance to the caller.
     *resistance_ohms = calculated_resistance;
 
     return true;

@@ -48,6 +48,13 @@ bool calculate_test_current(float sense_voltage, float *test_current);
 // Calculate resistance using the measured cable voltage and test current.
 bool calculate_resistance(float cable_voltage, float test_current, float *resistance_ohms);
 
+
+// Do a  complete resistance measurement.
+// Returns the calculated resistance through resistance_ohms variable.
+bool measure_resistance(float *resistance_ohms);
+
+
+
 #endif
 
 
