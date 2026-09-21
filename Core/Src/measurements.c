@@ -1,8 +1,9 @@
 
 
+#include <stddef.h>
+#include <stdint.h>
 #include "measurements.h"
 #include "ads1220.h"
-#include <stddef.h>
 
 
 // Precision sense resistor used by the current source.
@@ -184,7 +185,7 @@ bool measure_resistance(float *resistance_ohms)
     float test_current;
     float calculated_resistance;
 
-    // Verify that the caller provided a valid output address.
+    // verify that the caller provided a valid output address.
     if (resistance_ohms == NULL)
     {
         return false;
@@ -196,9 +197,8 @@ bool measure_resistance(float *resistance_ohms)
     /*
     Measure both ADS1220 input pairs:
 
-    AIN0 - AIN1 measures the DUT or cable voltage.
-    AIN2 - AIN3 measures the voltage across the 200-ohm
-    current-sense resistor.
+    AIN0 - AIN1 measures the  cable voltage.
+    AIN2 - AIN3 measures the voltage across the 200-ohm  resistor.
     */
     if (!measure_voltages(&cable_voltage, &sense_voltage))
     {
@@ -219,6 +219,55 @@ bool measure_resistance(float *resistance_ohms)
 
     // Copy the valid resistance to the caller.
     *resistance_ohms = calculated_resistance;
+
+    return true;
+}
+
+/*
+64 × 22.27 ms = 1425 ms conversion time
+
+1425 ms
++ 64 ms ADS settling delays
++ 16 ms cable MUX settling
++ approximately 50–150 ms overhead
+~= 1.56–1.66 seconds
+*/
+
+bool measure_average_resistance(uint8_t sample_count, float *average_resistance_ohms)
+{
+    float resistance_sum = 0.0f;
+    float measured_resistance;
+    uint8_t sample_index;
+    uint8_t valid_sample_count = 0U;
+
+    // Verify that the caller provided a valid output address.
+    if (average_resistance_ohms == NULL)
+    {
+        return false;
+    }
+
+    // Start with a safe output value.
+    *average_resistance_ohms = 0.0f;
+
+    // Attempt the requested number of resistance measurements.
+    for (sample_index = 0U; sample_index < sample_count; sample_index++)
+    {
+        if (measure_resistance(&measured_resistance))
+        {
+            // Include only successful measurements in the sum.
+            resistance_sum = resistance_sum + measured_resistance;
+            valid_sample_count++;
+        }
+    }
+
+    // An average cannot be calculated if every sample failed.
+    if (valid_sample_count == 0U)
+    {
+        return false;
+    }
+
+    // Divide by the number of successful samples, not by the number of requested samples.
+    *average_resistance_ohms = resistance_sum / (float)valid_sample_count;
 
     return true;
 }

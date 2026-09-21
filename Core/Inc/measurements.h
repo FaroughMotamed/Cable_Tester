@@ -54,6 +54,8 @@ bool calculate_resistance(float cable_voltage, float test_current, float *resist
 bool measure_resistance(float *resistance_ohms);
 
 
+// Perform multiple resistance measurements and return their average.
+bool measure_average_resistance(uint8_t sample_count, float *average_resistance_ohms);
 
 #endif
 
