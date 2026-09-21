@@ -75,7 +75,6 @@ void cable_tester_process(void);
 // cable close: true
 bool check_cable_presence(void);
 
-
 bool cable_presence_process( bool presence_check_allowed, cable_presence_status_t *status, bool *new_result)
 
 
