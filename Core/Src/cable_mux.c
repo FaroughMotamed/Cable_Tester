@@ -81,3 +81,103 @@ static void cable_mux_set_address(uint8_t mux_channel)
 }
 
 
+static void cable_mux_latch_address(void)
+{
+    /*
+    Select all four ADG732 devices.
+    The chip-select signals are active low, so writing RESET selects each MUX.
+    */
+    HAL_GPIO_WritePin(MUX1_CS_N_GPIO_Port, MUX1_CS_N_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(MUX2_CS_N_GPIO_Port, MUX2_CS_N_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(MUX3_CS_N_GPIO_Port, MUX3_CS_N_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(MUX4_CS_N_GPIO_Port, MUX4_CS_N_Pin, GPIO_PIN_RESET);
+
+    
+    //Bring WR low while the address on A0 through A4 is stable.
+    HAL_GPIO_WritePin(MUX_WR_N_GPIO_Port, MUX_WR_N_Pin, GPIO_PIN_RESET);
+
+    // Provide a short address setup and WR pulse delay.
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+
+
+    //The rising edge of WR stores the channel address inside every selected ADG732.
+    HAL_GPIO_WritePin(MUX_WR_N_GPIO_Port,  MUX_WR_N_Pin, GPIO_PIN_SET);
+
+    // Allow a short hold time after the WR rising edge.
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+
+    /*
+    Deselect all four MUXes after the address has been stored.
+    The selected analog channel remains latched.*/
+    HAL_GPIO_WritePin(MUX1_CS_N_GPIO_Port, MUX1_CS_N_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(MUX2_CS_N_GPIO_Port, MUX2_CS_N_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(MUX3_CS_N_GPIO_Port, MUX3_CS_N_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(MUX4_CS_N_GPIO_Port, MUX4_CS_N_Pin, GPIO_PIN_SET);
+}
+
+
+static void cable_mux_enable_all(void)
+{
+    // Enable MUX 1.
+    HAL_GPIO_WritePin(MUX1_EN_N_GPIO_Port, MUX1_EN_N_Pin, GPIO_PIN_RESET);
+
+    // Enable MUX 2.
+    HAL_GPIO_WritePin(MUX2_EN_N_GPIO_Port, MUX2_EN_N_Pin, GPIO_PIN_RESET);
+
+    // Enable MUX 3.
+    HAL_GPIO_WritePin(MUX3_EN_N_GPIO_Port, MUX3_EN_N_Pin, GPIO_PIN_RESET);
+
+    // Enable MUX 4.
+    HAL_GPIO_WritePin(MUX4_EN_N_GPIO_Port,  MUX4_EN_N_Pin, GPIO_PIN_RESET);
+}
+
+void cable_mux_disable_all(void)
+{
+    // EN_N high disconnects all channels in MUX 1.
+    HAL_GPIO_WritePin(MUX1_EN_N_GPIO_Port, MUX1_EN_N_Pin, GPIO_PIN_SET);
+
+    // EN_N high disconnects all channels in MUX 2.
+    HAL_GPIO_WritePin(MUX2_EN_N_GPIO_Port, MUX2_EN_N_Pin, GPIO_PIN_SET);
+
+    // EN_N high disconnects all channels in MUX 3.
+    HAL_GPIO_WritePin(MUX3_EN_N_GPIO_Port, MUX3_EN_N_Pin, GPIO_PIN_SET);
+
+    // EN_N high disconnects all channels in MUX 4.
+    HAL_GPIO_WritePin(MUX4_EN_N_GPIO_Port,  MUX4_EN_N_Pin, GPIO_PIN_SET);
+}
+
+// All 4 Muxes select the conductor and are enabled. 
+bool cable_mux_select_conductor(uint8_t conductor_number)
+{
+    uint8_t mux_channel;
+
+    // Disconnect the analog paths before changing channels.
+    cable_mux_disable_all();
+
+    // Convert conductor 1-8 to ADG732 address 0-7.
+    mux_channel = conductor_number - 1U;
+
+    // Put the new address on A0-A4.
+    cable_mux_set_address(mux_channel);
+
+    // Store that address in all four MUXes.
+    cable_mux_latch_address();
+
+    // Connect the selected channels.
+    cable_mux_enable_all();
+
+    // Allow the complete analog circuit to settle.
+    HAL_Delay(CABLE_MUX_SETTLING_DELAY_MS);
+
+    return true;
+}

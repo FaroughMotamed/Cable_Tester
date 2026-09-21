@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "measurements.h"
+#include "cable_mux.h"
 #include "ads1220.h"
 
 
@@ -14,11 +15,13 @@
 
 
 // The current is about 10.24 mA. The below threshold is only to prevetn division be zero.
-#define MINIMUM_TEST_CURRENT_A       0.001f
+#define MINIMUM_TEST_CURRENT_A          0.001f
 
 // Highest resistance accepted by this device.
 // The theoretical calculation is around 100 ohm.
-#define MAXIMUM_RESISTANCE_OHMS      200.0f
+#define MAXIMUM_RESISTANCE_OHMS         200.0f
+
+#define RESISTANCE_SAMPLES_PER_CONDUCTOR  4U
 
 
 /*
@@ -271,5 +274,44 @@ bool measure_average_resistance(uint8_t sample_count, float *average_resistance_
 
     return true;
 }
+
+
+// Select one cable conductor and measure its average resistance.
+bool measure_conductor_resistance( uint8_t conductor_number, float *resistance_ohms)
+{
+    bool measurement_succeeded;
+
+    // Verify that the caller provided a valid output address.
+    if (resistance_ohms == NULL)
+    {
+        return false;
+    }
+
+    // Start with a safe output value.
+    *resistance_ohms = 0.0f;
+
+    /*
+    Configure the cable MUXes so that the requested conductor
+    is connected to the current source and measurement circuit.
+
+    cable_mux_select_conductor() also allows the analog path  to settle before returning.*/
+    if (!cable_mux_select_conductor(conductor_number))
+    {
+        cable_mux_disable_all();
+        return false;
+    }
+
+    /* Attempt four resistance measurements.
+       This function fails only if all four samples fail. */
+    measurement_succeeded = measure_average_resistance( RESISTANCE_SAMPLES_PER_CONDUCTOR, resistance_ohms);
+
+    /* Disconnect the cable from the measurement circuit after
+       the measurement, regardless of whether it succeeded. */
+    cable_mux_disable_all();
+
+    return measurement_succeeded;
+}
+
+
 
 

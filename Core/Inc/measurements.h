@@ -57,6 +57,9 @@ bool measure_resistance(float *resistance_ohms);
 // Perform multiple resistance measurements and return their average.
 bool measure_average_resistance(uint8_t sample_count, float *average_resistance_ohms);
 
+// Select one cable conductor and measure its average resistance.
+bool measure_conductor_resistance( uint8_t conductor_number, float *resistance_ohms);
+
 #endif
 
 
