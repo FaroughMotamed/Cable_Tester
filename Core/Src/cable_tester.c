@@ -174,31 +174,6 @@ Enter READY state
 }
 
 
-/*
- Measure the voltage across the cable.
- AIN0 is the positive input.
- AIN1 is the negative input.
- cable_voltage receives AIN0 - AIN1 in volts.
- */
-bool measure_cable_voltage(float *cable_voltage){
-
-  bool output= ads1220_measure_input(ADS1220_CABLE_SELECT, cable_voltage);
-  return output;
-}
-
-
-
-/*
- Measure the voltage across the 200.0 ohm resistor;
- AIN2 is the positive input.
- AIN3 is the negative input.
- sense_voltage receives AIN2 - AIN3 in volts.
-*/
-bool measure_sense_voltage(float *sense_voltage){
-
-  bool output= ads1220_measure_input(ADS1220_RESISTOR_SELECT, sense_voltage);
-  return output;
-}
 
 
 // Determine cable presence from the sense-resistor voltage.

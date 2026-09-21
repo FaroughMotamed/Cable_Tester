@@ -67,22 +67,6 @@ void cable_tester_init(void);
 void cable_tester_process(void);
 
 
-/*
- Measure the voltage across the cable.
- AIN0 is the positive input.
- AIN1 is the negative input.
- cable_voltage receives AIN0 - AIN1 in volts.
- */
-bool measure_cable_voltage(float *cable_voltage);
-
-/*
- Measure the voltage across the 200.0 ohm resistor;
- AIN2 is the positive input.
- AIN3 is the negative input.
- sense_voltage receives AIN2 - AIN3 in volts.
-*/
-bool measure_sense_voltage(float *sense_voltage);
-
 // Determine cable presence from the sense-resistor voltage.
 // open cable generates no current and no voltage difference across resistor.
 // closed cable generates 2.048V/200 ohm=10.24 mA current and 2.028 Voltage differnece.
