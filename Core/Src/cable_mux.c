@@ -14,6 +14,9 @@
 
 #define CABLE_MUX_SETTLING_DELAY_MS    2U
 
+#define ADG732_FIRST_CHANNEL    1U
+#define ADG732_LAST_CHANNEL     32U
+
 
 static void cable_mux_set_address(uint8_t mux_channel)
 {
@@ -181,3 +184,145 @@ bool cable_mux_select_conductor(uint8_t conductor_number)
 
     return true;
 }
+
+
+
+
+#define FIRST_CABLE_CONDUCTOR           1U
+#define LAST_CABLE_CONDUCTOR            20U
+#define CABLE_MUX_SETTLING_DELAY_MS     2U
+
+bool cable_mux_select_path( uint8_t end_a_conductor, uint8_t end_b_conductor)
+{
+    // Validate the selected conductor at end A.
+    if ((end_a_conductor < FIRST_CABLE_CONDUCTOR) ||  (end_a_conductor > LAST_CABLE_CONDUCTOR))
+    {
+        cable_mux_disable_all();
+        return false;
+    }
+
+    // Validate the selected conductor at end B.
+    if ((end_b_conductor < FIRST_CABLE_CONDUCTOR) || (end_b_conductor > LAST_CABLE_CONDUCTOR))
+    {
+        cable_mux_disable_all();
+        return false;
+    }
+
+    // Disconnect every analog path before changing addresses.
+    cable_mux_disable_all();
+
+    // Program both MUXes associated with cable end A.
+    if (!cable_mux_set_channel(CABLE_MUX_END_A_FORCE, end_a_conductor))
+    {
+        cable_mux_disable_all();
+        return false;
+    }
+
+    if (!cable_mux_set_channel(CABLE_MUX_END_A_SENSE, end_a_conductor))
+    {
+        cable_mux_disable_all();
+        return false;
+    }
+
+    // Program both MUXes associated with cable end B.
+    if (!cable_mux_set_channel(CABLE_MUX_END_B_FORCE, end_b_conductor))
+    {
+        cable_mux_disable_all();
+        return false;
+    }
+
+    if (!cable_mux_set_channel(CABLE_MUX_END_B_SENSE, end_b_conductor))
+    {
+        cable_mux_disable_all();
+        return false;
+    }
+
+    // Enable the two paths at cable end A.
+    cable_mux_enable(CABLE_MUX_END_A_FORCE);
+    cable_mux_enable(CABLE_MUX_END_A_SENSE);
+
+    // Enable the two paths at cable end B.
+    cable_mux_enable(CABLE_MUX_END_B_FORCE);
+    cable_mux_enable(CABLE_MUX_END_B_SENSE);
+
+    // Allow the complete analog path to settle.
+    HAL_Delay(CABLE_MUX_SETTLING_DELAY_MS);
+
+    return true;
+}
+
+
+
+static void cable_mux_latch_address(cable_mux_id_t mux)
+{
+    // Begin with every MUX control interface deselected.
+    cable_mux_deselect_all();
+
+    // Select only the MUX that should store the address.
+    switch (mux)
+    {
+        case CABLE_MUX_END_A_FORCE:
+
+            HAL_GPIO_WritePin(MUX1_CS_N_GPIO_Port,
+                              MUX1_CS_N_Pin,
+                              GPIO_PIN_RESET);
+            break;
+
+        case CABLE_MUX_END_A_SENSE:
+
+            HAL_GPIO_WritePin(MUX2_CS_N_GPIO_Port,
+                              MUX2_CS_N_Pin,
+                              GPIO_PIN_RESET);
+            break;
+
+        case CABLE_MUX_END_B_FORCE:
+
+            HAL_GPIO_WritePin(MUX3_CS_N_GPIO_Port,
+                              MUX3_CS_N_Pin,
+                              GPIO_PIN_RESET);
+            break;
+
+        case CABLE_MUX_END_B_SENSE:
+
+            HAL_GPIO_WritePin(MUX4_CS_N_GPIO_Port,
+                              MUX4_CS_N_Pin,
+                              GPIO_PIN_RESET);
+            break;
+
+        default:
+
+            // The caller validates the MUX before reaching here.
+            return;
+    }
+
+    // Begin the write operation.
+    HAL_GPIO_WritePin(MUX_WR_N_GPIO_Port,
+                      MUX_WR_N_Pin,
+                      GPIO_PIN_RESET);
+
+    // Provide a short setup and write-pulse time.
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+
+    // The WR rising edge stores the address in the selected MUX.
+    HAL_GPIO_WritePin(MUX_WR_N_GPIO_Port,
+                      MUX_WR_N_Pin,
+                      GPIO_PIN_SET);
+
+    // Provide a short address hold time.
+    __NOP();
+    __NOP();
+    __NOP();
+    __NOP();
+
+    // End the write by returning every CS signal high.
+    cable_mux_deselect_all();
+}
+
+
