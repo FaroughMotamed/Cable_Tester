@@ -1,3 +1,6 @@
+#include <main.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 
 
@@ -40,6 +43,26 @@ void Relay_SelectSideA(uint8_t pin)
         /* Shared board 010, channels 1-4 */
         MCP23017_WritePin(0x02, pin - 17, 1);
     }
+}
+
+
+
+void Relay_DisconnectSideA(void)
+{
+    // Board 000 belongs entirely to Side A
+    MCP23017_WriteGPIO(0x00, 0x0000);
+
+    /*
+     Shared board 010:
+     Clear channels 1-4 only.
+     Preserve all other channels, especially
+     Side-B channels 9-12.
+     */
+    uint16_t state = MCP23017_ReadGPIO(0x02);
+
+    state = state & (0xFFF0);
+
+    MCP23017_WriteGPIO(0x02, state);
 }
 
 
