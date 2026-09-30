@@ -55,12 +55,32 @@ void Relay_DisconnectSideA(void)
     /*
      Shared board 010:
      Clear channels 1-4 only.
-     Preserve all other channels, especially
-     Side-B channels 9-12.
+     Preserve all other channels
      */
     uint16_t state = MCP23017_ReadGPIO(0x02);
 
     state = state & (0xFFF0);
+
+    MCP23017_WriteGPIO(0x02, state);
+}
+
+
+void Relay_DisconnectSideB(void)
+{
+    uint16_t state;
+
+    // Turn OFF all relays on Side-B board 001 
+    MCP23017_WriteGPIO(0x01, 0x0000);
+
+    /*
+     Shared board 010:
+     Clear CH9-CH12 while preserving all other channels.
+     Mask for bits 9 to 12: 0x0F00 =  0000 1111 0000 0000
+     we want to clear them:  0xF0FF = 1111 0000 1111 1111
+     */
+    state = MCP23017_ReadGPIO(0x02);
+
+    state = state & 0xF0FF;
 
     MCP23017_WriteGPIO(0x02, state);
 }
