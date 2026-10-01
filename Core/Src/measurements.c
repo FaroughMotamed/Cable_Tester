@@ -329,16 +329,7 @@ bool test_conductor_pair(uint8_t end_a_pin, uint8_t end_b_pin, float *resistance
 
     /*
      Select the requested path:
-
-         End A pin
-             ↓
-       Force-A + Sense-A
-             ↓
-           cable
-             ↓
-       Force-B + Sense-B
-             ↓
-         End B pin
+         End A pin -> Force-A + Sense-A -> cable -> Force-B + Sense-B ->  End B pin
     */
     if (!cable_mux_select_path(end_a_pin, end_b_pin))
     {
