@@ -60,6 +60,24 @@ bool measure_average_resistance(uint8_t sample_count, float *average_resistance_
 // Select one cable conductor and measure its average resistance.
 bool measure_conductor_resistance( uint8_t conductor_number, float *resistance_ohms);
 
+
+
+/*
+ Select one conductor at cable end A and one conductor at
+ cable end B, then measure the resistance between them.
+
+ Example:
+     test_conductor_pair(2, 5, &resistance);
+
+ tests:
+     End A pin 2 -> End B pin 5
+
+ Returns:
+     true  = resistance measurement succeeded.
+     false = invalid path or measurement failed.
+*/
+bool test_conductor_pair(uint8_t end_a_pin, uint8_t end_b_pin, float *resistance_ohms);
+
 #endif
 
 

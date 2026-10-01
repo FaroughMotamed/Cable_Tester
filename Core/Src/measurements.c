@@ -314,4 +314,66 @@ bool measure_conductor_resistance( uint8_t conductor_number, float *resistance_o
 
 
 
+bool test_conductor_pair(uint8_t end_a_pin, uint8_t end_b_pin, float *resistance_ohms)
+{
+    bool measurement_succeeded;
+
+    // Verify output pointer.
+    if (resistance_ohms == NULL)
+    {
+        return false;
+    }
+
+    // Start with a safe output value.
+    *resistance_ohms = 0.0f;
+
+    /*
+     Select the requested path:
+
+         End A pin
+             ↓
+       Force-A + Sense-A
+             ↓
+           cable
+             ↓
+       Force-B + Sense-B
+             ↓
+         End B pin
+    */
+    if (!cable_mux_select_path(end_a_pin, end_b_pin))
+    {
+        cable_mux_disable_all();
+        return false;
+    }
+
+    /*
+     Measure the resistance of the selected A-to-B path.
+
+     The MUX function has already allowed the analog
+     path to settle before returning.
+    */
+    measurement_succeeded =  measure_average_resistance(  RESISTANCE_SAMPLES_PER_CONDUCTOR,  resistance_ohms);
+
+    /*
+     Always disconnect the cable from the measurement circuit after the measurement.
+    */
+    cable_mux_disable_all();
+
+    return measurement_succeeded;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
