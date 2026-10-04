@@ -86,6 +86,31 @@ void Relay_DisconnectSideB(void)
 }
 
 
+void Relay_SelectSideB(uint8_t pin)
+{
+    // Reject invalid pins before changing the current path.
+    if ((pin < 1U) || (pin > 20U))
+    {
+        return;
+    }
+
+    // Release the previous Side-B relay.
+    // Side A remains selected.
+    Relay_DisconnectSideB();
+
+    if (pin <= 16U)
+    {
+        // Board 001: cable pins 1–16 use bits 0–15.
+        MCP23017_WritePin(0x01U, pin - 1U, 1U);
+    }
+    else
+    {
+        // Board 010: cable pins 17–20 use bits 8–11.
+        MCP23017_WritePin(0x02U, pin - 9U, 1U);
+    }
+}
+
+
 
 
 
