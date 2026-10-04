@@ -3,6 +3,278 @@
 #include <stdint.h>
 
 
+/*
+BIT MASKING FOR RELAY OUTPUTS
+============================
+
+Each MCP23017 has 16 outputs:
+    Port A: GPA0–GPA7 -> relay channels 1–8.
+    Port B: GPB0–GPB7 -> relay channels 9–16.
+
+For our active-high relay circuit:
+    Bit 1 -> output HIGH -> relay ON.
+    Bit 0 -> output LOW  -> relay OFF.
+
+Channel numbers start at 1; bit numbers start at 0:
+    bit_number = channel - 1
+
+NUMBER FORMATS
+--------------
+Decimal, hexadecimal and binary can represent the same value:
+    5 = 0x05 = binary 0101.
+
+0x means hexadecimal. Each hexadecimal digit represents four bits:
+    0 = 0000    1 = 0001    2 = 0010    3 = 0011
+    C = 1100    D = 1101    E = 1110    F = 1111
+
+The suffix U means unsigned.
+
+SINGLE-CHANNEL MASKS
+-------------------
+Channel   Bit   Hex mask
+   1       0    0x0001
+   2       1    0x0002 = 0b 0000 0000 0000 0010
+   3       2    0x0004 = 0b 0000 0000 0000 1000
+   4       3    0x0008
+   5       4    0x0010
+   6       5    0x0020
+   7       6    0x0040
+   8       7    0x0080
+   9       8    0x0100
+  10       9    0x0200
+  11      10    0x0400
+  12      11    0x0800
+  13      12    0x1000
+  14      13    0x2000
+  15      14    0x4000
+  16      15    0x8000 = 0b 1000 0000 0000 0000
+
+Example:
+    0x0100 = binary 0000 0001 0000 0000.
+    Only bit 8 is set, so only channel 9 is selected.
+    Its numerical value is 256, not 9.
+
+CREATE A MASK: LEFT SHIFT <<
+---------------------------
+Start with 1 and move it to the required bit position:
+
+    uint16_t mask = (uint16_t)(1U << (channel - 1U));
+
+Validate channel is 1–16 BEFORE calculating the mask.
+
+Examples:
+    1U << 2U -> 0x0004 -> channel 3.
+    1U << 4U -> 0x0010 -> channel 5.
+
+BITWISE OPERATORS
+-----------------
+OR  | : result bit is 1 if either input bit is 1.
+AND & : result bit is 1 only if both input bits are 1.
+NOT ~ : reverses every bit.
+
+Use | and &, not logical operators || and &&.
+
+REPLACE ALL OUTPUT STATES
+-------------------------
+    state = 0x0010U;  // Only channel 5 ON.
+    state = 0x0000U;  // All channels OFF.
+    state = 0xFFFFU;  // All channels ON.
+
+SET SELECTED BITS, PRESERVING THE REST
+-------------------------------------
+    state |= mask;    // Same as: state = state | mask.
+
+Example:
+    state = 0x0004U;  // Channel 3 ON.
+    state |= 0x0010U; // Add channel 5.
+    // Result: 0x0014 -> channels 3 and 5 ON.
+
+CLEAR SELECTED BITS, PRESERVING THE REST
+--------------------------------------
+    state &= (uint16_t)~mask;
+
+Example:
+    state = 0x0014U;             // Channels 3 and 5 ON.
+    state &= (uint16_t)~0x0004U; // Turn channel 3 OFF.
+    // Result: 0x0010 -> only channel 5 ON.
+
+CHECK A SELECTED BIT
+-------------------
+    bool commanded_on = (state & mask) != 0U;
+
+This checks the stored command, not physical relay contact movement.
+
+CLEAR GROUPS OF BITS
+-------------------
+    state &= 0xFFF0U;
+    // Mask: 1111 1111 1111 0000.
+    // Clear bits 0–3: channels 1–4.
+    // Preserve channels 5–16.
+
+    state &= 0xF0FFU;
+    // Mask: 1111 0000 1111 1111.
+    // Clear bits 8–11: channels 9–12.
+    // Preserve all other channels.
+
+On shared board 010:
+    Side A pins 17–20 -> channels 1–4.
+    Side B pins 17–20 -> channels 9–12.
+
+SPLIT THE 16-BIT PATTERN INTO TWO PORTS
+-------------------------------------
+    uint8_t port_a = (uint8_t)(state & 0x00FFU);
+    uint8_t port_b = (uint8_t)(state >> 8U);
+
+For state = 0x0100:
+    port_a = 0x00 -> channels 1–8 OFF.
+    port_b = 0x01 -> channel 9 ON.
+
+SEND THE PATTERN TO THE HARDWARE
+-------------------------------
+Changing state only changes a variable in STM32 memory.
+Call the driver to update the expander:
+
+    bool success = MCP23017_WriteGPIO(board, state);
+
+Board index -> actual 7-bit I2C address:
+    0 -> 0x20
+    1 -> 0x21
+    2 -> 0x22
+
+Example:
+    MCP23017_WriteGPIO(1U, 0x0010U);
+    // Board 001: only channel 5 ON.
+
+This replaces all 16 output commands on THAT board.
+Other boards are unaffected.
+Always handle a false return: an I2C write failed, and outputs
+may have changed only partially.
+
+REGISTER AND DEVICE ADDRESSES
+-----------------------------
+OLATA = Port A output latch.
+OLATB = Port B output latch.
+IOCON = I/O configuration register.
+BANK  = a bit in IOCON selecting the register-address layout.
+
+With BANK = 0:
+    OLATA address = 0x14.
+    OLATB address = 0x15.
+
+With BANK = 1:
+    OLATA address = 0x0A.
+    OLATB address = 0x1A.
+
+Our driver requires BANK = 0 and pins configured as outputs.
+Writing a latch stores the commanded levels until changed/reset.
+
+STM32F4 HAL expects the 7-bit DEVICE address shifted left:
+    device_address = (uint16_t)((0x20U + board) << 1U);
+
+Example: actual address 0x21 -> HAL argument 0x42.
+HAL manages the read/write bit.
+Do NOT shift the register address or output data.
+
+A write therefore specifies:
+    Device address -> which expander.
+    Register address -> which output latch.
+    Data byte -> which eight outputs are HIGH/LOW.
+*/
+
+
+#include "main.h"
+#include "relays.h"
+#include <stdbool.h>
+#include <stdint.h>
+
+// Defined by CubeMX after enabling I2C1.
+extern I2C_HandleTypeDef hi2c1;
+
+#define MCP23017_BASE_ADDRESS    0x20U
+#define MCP23017_OLATA           0x14U
+#define MCP23017_OLATB           0x15U
+#define MCP23017_TIMEOUT_MS      100U
+
+bool MCP23017_WriteGPIO(uint8_t board, uint16_t outputs)
+{
+    uint16_t device_address;
+    uint8_t port_a;
+    uint8_t port_b;
+
+    // This tester uses boards 000, 001 and 010.
+    if (board > 2U)
+    {
+        return false;
+    }
+
+    /*
+     Convert the board number to its I2C address:
+         0 -> 0x20
+         1 -> 0x21
+         2 -> 0x22
+
+     STM32 HAL expects the address shifted left by one bit.
+    */
+    device_address = (uint16_t)((MCP23017_BASE_ADDRESS + board) << 1U);
+
+    // Bits 0–7 belong to Port A.
+    port_a = (uint8_t)(outputs & 0x00FFU);
+
+    // Bits 8–15 belong to Port B.
+    port_b = (uint8_t)(outputs >> 8U);
+
+    // Write the first eight relay states.
+    /*
+    HAL_I2C_Mem_Write(
+    &hi2c1,                 // Use STM32 I2C1.
+    device_address,         // Which expander: shifted address.
+    MCP23017_OLATA,         // Which register: 0x14.
+    I2C_MEMADD_SIZE_8BIT,   // Register address is one byte.
+    &port_a,                // Address of the byte to send.
+    1U,                     // Send one data byte.
+    MCP23017_TIMEOUT_MS     // Timeout for this call.);
+    
+    */
+    if (HAL_I2C_Mem_Write(&hi2c1,  // Use STM32 I2C1.
+                          device_address,  // Which expander: shifted address.
+                          MCP23017_OLATA,  // 0x14U
+                          I2C_MEMADD_SIZE_8BIT,  // this valriable is 1, 
+                          &port_a, // Address of the byte to send.
+                          1U, // number of bytes to send
+                          MCP23017_TIMEOUT_MS) // Timeout for this call
+                          != HAL_OK)  
+        return false;
+    }
+
+    // Write the remaining eight relay states.
+    if (HAL_I2C_Mem_Write(&hi2c1,
+                          device_address,
+                          MCP23017_OLATB,
+                          I2C_MEMADD_SIZE_8BIT,
+                          &port_b,
+                          1U,
+                          MCP23017_TIMEOUT_MS) != HAL_OK)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+/*
+Requiremnts before using it
+
+Two requirements before using it:
+- CubeMX must initialize I2C1 on PB8/PB9.
+- Relay_Init() must establish BANK = 0, preload the latches with zero, and configure the expander pins as outputs.
+*/
+
+/*
+Examples:
+MCP23017_WriteGPIO(0U, 0x0000U); // Board 000: all OFF.
+MCP23017_WriteGPIO(1U, 0x0001U); // Board 001: channel 1 ON.
+MCP23017_WriteGPIO(2U, 0x0100U); // Board 010: channel 9 ON.
+*/
 
 void Relay_AllOff(void)
 {
@@ -109,6 +381,11 @@ void Relay_SelectSideB(uint8_t pin)
         MCP23017_WritePin(0x02U, pin - 9U, 1U);
     }
 }
+
+
+
+
+
 
 
 
