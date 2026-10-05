@@ -1,19 +1,18 @@
+#ifndef RELAYS_H
+#define RELAYS_H
 
-
-
-void Relay_AllOff(void);
+#include <stdbool.h>  // bool return type.
+#include <stdint.h>   // uint8_t and uint16_t parameter types.
 
 bool Relay_Init(void);
+bool MCP23017_WriteGPIO(uint8_t board, uint16_t outputs);
 
-Relay_AllOff();
+void Relay_AllOff(void);
+void Relay_SelectSideA(uint8_t pin);
+void Relay_SelectSideB(uint8_t pin);
+void Relay_DisconnectSideA(void);
+void Relay_DisconnectSideB(void);
 
-Relay_SelectSideA(uint8_t pin);
-Relay_SelectSideB(uint8_t pin);
-
-Relay_DisconnectSideA();
-Relay_DisconnectSideB();
-
-
-
+#endif /* RELAYS_H */
 
 
