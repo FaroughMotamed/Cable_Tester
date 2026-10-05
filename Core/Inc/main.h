@@ -129,10 +129,6 @@ void Error_Handler(void);
 #define JOY_PREVIOUS_N_GPIO_Port GPIOB
 #define MUX_FA_EN_N_Pin GPIO_PIN_7
 #define MUX_FA_EN_N_GPIO_Port GPIOB
-#define MUX_SB_CS_N_Pin GPIO_PIN_8
-#define MUX_SB_CS_N_GPIO_Port GPIOB
-#define ENC_SW_N_Pin GPIO_PIN_9
-#define ENC_SW_N_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
