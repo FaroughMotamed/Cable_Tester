@@ -3,8 +3,7 @@
 
 void Relay_AllOff(void);
 
-
-Relay_Init();
+bool Relay_Init(void);
 
 Relay_AllOff();
 

@@ -1,6 +1,7 @@
 #include <main.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include "relays.h"
 
 
 /*
@@ -35,17 +36,7 @@ Channel   Bit   Hex mask
    1       0    0x0001
    2       1    0x0002 = 0b 0000 0000 0000 0010
    3       2    0x0004 = 0b 0000 0000 0000 1000
-   4       3    0x0008
-   5       4    0x0010
-   6       5    0x0020
-   7       6    0x0040
-   8       7    0x0080
-   9       8    0x0100
-  10       9    0x0200
-  11      10    0x0400
-  12      11    0x0800
-  13      12    0x1000
-  14      13    0x2000
+  ...
   15      14    0x4000
   16      15    0x8000 = 0b 1000 0000 0000 0000
 
@@ -190,10 +181,16 @@ A write therefore specifies:
 // Defined by CubeMX after enabling I2C1.
 extern I2C_HandleTypeDef hi2c1;
 
-#define MCP23017_BASE_ADDRESS    0x20U
-#define MCP23017_OLATA           0x14U
-#define MCP23017_OLATB           0x15U
-#define MCP23017_TIMEOUT_MS      100U
+#define MCP23017_BASE_ADDRESS  0x20U  //Starting I2C device address for the MCP23017.  7-bit device address with A2/A1/A0 = 000; add board index.
+
+// Register addresses below assume IOCON.BANK = 0.
+#define MCP23017_OLATA         0x14U  // Register address for the Port A output latch. Output latch A: commands levels for channels 1–8.
+#define MCP23017_OLATB         0x15U  // Register address for the Port B output latch. Output latch B: commands levels for channels 9–16.
+#define MCP23017_TIMEOUT_MS    100U   // Timeout parameter passed to HAL I2C calls, in milliseconds.
+
+#define MCP23017_IODIRA        0x00U  // Register address for the direction of the eight Port B pins.
+#define MCP23017_IODIRB        0x01U  // Register address for the direction of the eight Port B pins.
+#define MCP23017_IOCON         0x0AU  // Register address for the chip's general configuration settings : BANK, sequential addressing, interrupts, etc.
 
 bool MCP23017_WriteGPIO(uint8_t board, uint16_t outputs)
 {
@@ -383,7 +380,101 @@ void Relay_SelectSideB(uint8_t pin)
 }
 
 
+bool Relay_Init(void)
+{
+    uint8_t board;
+    uint8_t register_index;
+    uint8_t value;
+    uint8_t readback;
+    uint16_t device_address;
 
+    /*
+     Register order matters:
+         1. Configure IOCON.
+         2. Preload both output latches with OFF values.
+         3. Enable the pins as outputs.
+    */
+    const uint8_t registers[] =
+    {
+        MCP23017_IOCON,
+        MCP23017_OLATA,
+        MCP23017_OLATB,
+        MCP23017_IODIRA,
+        MCP23017_IODIRB
+    };
+
+    // Initialize boards 000, 001 and 010.
+    for (board = 0U; board < 3U; board++)
+    {
+        device_address = (uint16_t)((MCP23017_BASE_ADDRESS + board) << 1U);
+
+        // Check whether this expander acknowledges its address.
+        if (HAL_I2C_IsDeviceReady(&hi2c1, device_address, 3U, MCP23017_TIMEOUT_MS) != HAL_OK)
+        {
+            return false;
+        }
+
+        /*
+         Establish BANK = 0 even if the chip was left in BANK = 1.
+
+         At address 0x05:
+             BANK = 1: this is IOCON; zero changes BANK to 0.
+             BANK = 0: this is GPINTENB; zero disables Port-B input interrupts, which we do not use.
+
+         This write does not change the relay output latches.
+        */
+        value = 0x00U;
+
+        if (HAL_I2C_Mem_Write(&hi2c1,
+                              device_address,
+                              0x05U,
+                              I2C_MEMADD_SIZE_8BIT,
+                              &value,
+                              1U,
+                              MCP23017_TIMEOUT_MS) != HAL_OK)
+        {
+            return false;
+        }
+
+        // Write and verify each initialization register.
+        for (register_index = 0U; register_index < sizeof(registers); register_index++)
+        {
+            value = 0x00U;
+
+            if (HAL_I2C_Mem_Write(&hi2c1,
+                                  device_address,
+                                  registers[register_index],
+                                  I2C_MEMADD_SIZE_8BIT,
+                                  &value,
+                                  1U,
+                                  MCP23017_TIMEOUT_MS) != HAL_OK)
+            {
+                return false;
+            }
+
+            if (HAL_I2C_Mem_Read(&hi2c1,
+                                 device_address,
+                                 registers[register_index],
+                                 I2C_MEMADD_SIZE_8BIT,
+                                 &readback,
+                                 1U,
+                                 MCP23017_TIMEOUT_MS) != HAL_OK)
+            {
+                return false;
+            }
+
+            if (readback != value)
+            {
+                return false;
+            }
+        }
+    }
+
+    // Allow previously energized relays time to release.
+    HAL_Delay(50U);
+
+    return true;
+}
 
 
 

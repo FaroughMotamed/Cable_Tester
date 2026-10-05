@@ -106,6 +106,13 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
 
+
+if (!Relay_Init())
+{
+    // Initialization failed: do not start a cable test.
+    Error_Handler();
+}
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
