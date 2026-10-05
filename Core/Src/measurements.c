@@ -2,9 +2,13 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <math.h>
 #include "measurements.h"
 #include "cable_mux.h"
 #include "ads1220.h"
+#include "relays.h"
+
+
 
 
 // Precision sense resistor used by the current source.
@@ -313,7 +317,7 @@ bool measure_conductor_resistance( uint8_t conductor_number, float *resistance_o
 }
 
 
-
+/*
 bool test_conductor_pair(uint8_t end_a_pin, uint8_t end_b_pin, float *resistance_ohms)
 {
     bool measurement_succeeded;
@@ -327,31 +331,150 @@ bool test_conductor_pair(uint8_t end_a_pin, uint8_t end_b_pin, float *resistance
     // Start with a safe output value.
     *resistance_ohms = 0.0f;
 
-    /*
-     Select the requested path:
-         End A pin -> Force-A + Sense-A -> cable -> Force-B + Sense-B ->  End B pin
-    */
+    
+    // Select the requested path: End A pin -> Force-A + Sense-A -> cable -> Force-B + Sense-B ->  End B pin
+    
     if (!cable_mux_select_path(end_a_pin, end_b_pin))
     {
         cable_mux_disable_all();
         return false;
     }
 
-    /*
-     Measure the resistance of the selected A-to-B path.
+    
+     // Measure the resistance of the selected A-to-B path.
 
-     The MUX function has already allowed the analog
-     path to settle before returning.
-    */
+     // The MUX function has already allowed the analog
+     // path to settle before returning.
+    
     measurement_succeeded =  measure_average_resistance(  RESISTANCE_SAMPLES_PER_CONDUCTOR,  resistance_ohms);
 
-    /*
-     Always disconnect the cable from the measurement circuit after the measurement.
-    */
+    
+    // Always disconnect the cable from the measurement circuit after the measurement.
+    
     cable_mux_disable_all();
 
     return measurement_succeeded;
 }
+*/
+
+
+pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement_t *result)
+{
+    uint32_t start_ms;
+    uint8_t valid_count = 0U;
+    uint8_t required_count;
+    bool previous_connected = false;
+
+    float cable_voltage;
+    float sense_voltage;
+    float current;
+    float resistance;
+    float cable_sum = 0.0f;
+    float sense_sum = 0.0f;
+    float resistance_sum = 0.0f;
+
+    if (result == NULL)
+    {
+        return PAIR_INVALID_ARGUMENT;
+    }
+
+    *result = (pair_measurement_t){0};
+
+    if ((a_pin < 1U) || (a_pin > 20U) ||
+        (b_pin < 1U) || (b_pin > 20U))
+    {
+        return PAIR_INVALID_ARGUMENT;
+    }
+
+    // Select the relays and wait 50 ms inside Relay_SelectPath().
+    if (!Relay_SelectPath(a_pin, b_pin))
+    {
+        return PAIR_RELAY_FAULT;
+    }
+
+     if (a_pin == b_pin) { required_count =2U;  }
+     else                { required_count = 1U; }
+
+    start_ms = HAL_GetTick();
+
+    while ((HAL_GetTick() - start_ms) < 3000U)
+    {
+        // Existing function reads sense voltage first, cable second.
+        if (!measure_voltages(&cable_voltage, &sense_voltage))
+        {
+            continue;
+        }
+
+        // Do not accept a sample completed after the deadline.
+        if ((HAL_GetTick() - start_ms) >= 3000U)
+        {
+            break;
+        }
+
+        // Reject invalid numbers and unreasonable sense voltages.
+        if (!isfinite(cable_voltage) ||
+            !isfinite(sense_voltage) ||
+            (sense_voltage < -0.005f) ||
+            (sense_voltage > 2.5f))
+        {
+            continue;
+        }
+
+        // Small negative readings near zero are accepted as zero current.
+        if (sense_voltage < 0.0f)
+        {
+            sense_voltage = 0.0f;
+        }
+
+        current = sense_voltage / 200.0f;
+
+        // Same connectivity threshold used in the relay firmware.
+        bool connected = (sense_voltage >= 1.5f);
+
+        resistance = 0.0f;
+
+        if (connected)
+        {
+            if (!calculate_resistance(cable_voltage, current,  &resistance))
+            {
+                continue;
+            }
+        }
+
+        // Matching-pin samples must agree about connectivity.
+        if ((valid_count > 0U) &&
+            (connected != previous_connected))
+        {
+            valid_count = 0U;
+            cable_sum = 0.0f;
+            sense_sum = 0.0f;
+            resistance_sum = 0.0f;
+        }
+
+        previous_connected = connected;
+        cable_sum += cable_voltage;
+        sense_sum += sense_voltage;
+        resistance_sum += resistance;
+        valid_count++;
+
+        if (valid_count >= required_count)
+        {
+            result->connected = connected;
+            result->cable_voltage = cable_sum / valid_count;
+            result->sense_voltage = sense_sum / valid_count;
+            result->current_a = result->sense_voltage / 200.0f;
+            result->resistance_ohms = resistance_sum / valid_count;
+
+            return PAIR_MEASUREMENT_OK;
+        }
+    }
+
+    // Measurement fault: attempt to release every relay.
+    (void)Relay_AllOff();
+
+    return PAIR_MEASUREMENT_TIMEOUT;
+}
+
 
 
 

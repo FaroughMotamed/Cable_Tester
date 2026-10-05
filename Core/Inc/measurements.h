@@ -76,7 +76,29 @@ bool measure_conductor_resistance( uint8_t conductor_number, float *resistance_o
      true  = resistance measurement succeeded.
      false = invalid path or measurement failed.
 */
-bool test_conductor_pair(uint8_t end_a_pin, uint8_t end_b_pin, float *resistance_ohms);
+// bool test_conductor_pair(uint8_t end_a_pin, uint8_t end_b_pin, float *resistance_ohms);
+
+
+
+
+typedef enum
+{
+    PAIR_MEASUREMENT_OK = 0,
+    PAIR_INVALID_ARGUMENT,
+    PAIR_RELAY_FAULT,
+    PAIR_MEASUREMENT_TIMEOUT
+} pair_status_t;
+
+typedef struct
+{
+    bool connected;
+    float cable_voltage;
+    float sense_voltage;
+    float current_a;
+    float resistance_ohms; // Meaningful only when connected is true.
+} pair_measurement_t;
+
+pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement_t *result);
 
 #endif
 
