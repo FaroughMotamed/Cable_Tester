@@ -193,6 +193,14 @@ extern I2C_HandleTypeDef hi2c1;
 #define MCP23017_IODIRB        0x01U  // Register address for the direction of the eight Port B pins.
 #define MCP23017_IOCON         0x0AU  // Register address for the chip's general configuration settings : BANK, sequential addressing, interrupts, etc.
 
+
+/*
+Examples:
+MCP23017_WriteGPIO(0U, 0x0000U); // Board 000: all OFF.
+MCP23017_WriteGPIO(1U, 0x0001U); // Board 001: channel 1 ON.
+MCP23017_WriteGPIO(2U, 0x0100U); // Board 010: channel 9 ON.
+*/
+// function to write GPIOs of a certain I2C expandee board
 bool MCP23017_WriteGPIO(uint8_t board, uint16_t outputs)
 {
     uint16_t device_address;
@@ -267,12 +275,6 @@ Two requirements before using it:
 - Relay_Init() must establish BANK = 0, preload the latches with zero, and configure the expander pins as outputs.
 */
 
-/*
-Examples:
-MCP23017_WriteGPIO(0U, 0x0000U); // Board 000: all OFF.
-MCP23017_WriteGPIO(1U, 0x0001U); // Board 001: channel 1 ON.
-MCP23017_WriteGPIO(2U, 0x0100U); // Board 010: channel 9 ON.
-*/
 
 
 bool MCP23017_ReadGPIO(uint8_t board, uint16_t *outputs)
@@ -327,112 +329,195 @@ bool MCP23017_ReadGPIO(uint8_t board, uint16_t *outputs)
     return true;
 }
 
-
-
-void Relay_AllOff(void)
-{
-    /*
-    Board 000:  0000 0000 0000 0000
-    Board 001:  0000 0000 0000 0000
-    Board 010:  0000 0000 0000 0000
-    */
-
-    // Board 000 - Side A
-    MCP23017_WriteGPIO(0x00, 0x0000);
-
-    // Board 001 - Side B
-    MCP23017_WriteGPIO(0x01, 0x0000);
-
-    // Board 010 - Shared A/B
-    MCP23017_WriteGPIO(0x02, 0x0000);
-}
-
-void Relay_SelectSideA(uint8_t pin)
-{
-    // First disconnect all Side-A relays
-    Relay_DisconnectSideA();
-
-    /*
-     Select the requested Side-A cable pin.
-     Pins handled by relay board 000 come first.
-     Remaining Side-A pins use channels 1-4 of shared relay board 010.
-     */
-
-    if (pin >= 1 && pin <= 16)
-    {
-        /* Board 000 */
-        MCP23017_WritePin(0x00, pin - 1, 1);
-    }
-    else if (pin >= 17 && pin <= 20)
-    {
-        /* Shared board 010, channels 1-4 */
-        MCP23017_WritePin(0x02, pin - 17, 1);
-    }
-}
-
-
-
-void Relay_DisconnectSideA(void)
-{
-    // Board 000 belongs entirely to Side A
-    MCP23017_WriteGPIO(0x00, 0x0000);
-
-    /*
-     Shared board 010:
-     Clear channels 1-4 only.
-     Preserve all other channels
-     */
-    uint16_t state = MCP23017_ReadGPIO(0x02);
-
-    state = state & (0xFFF0);
-
-    MCP23017_WriteGPIO(0x02, state);
-}
-
-
-void Relay_DisconnectSideB(void)
+// write a single pin in a board.
+// Example:
+// Shared board 010: turn channel 9 ON.
+// write_result = MCP23017_WritePin(2U, 8U, true);
+bool MCP23017_WritePin(uint8_t board, uint8_t pin, bool on)
 {
     uint16_t state;
+    uint16_t mask;
+    bool write_result;
 
-    // Turn OFF all relays on Side-B board 001 
-    MCP23017_WriteGPIO(0x01, 0x0000);
+    // Validate board number and output bit index.
+    if ((board > 2U) || (pin > 15U))
+    {
+        return false;
+    }
 
-    /*
-     Shared board 010:
-     Clear CH9-CH12 while preserving all other channels.
-     Mask for bits 9 to 12: 0x0F00 =  0000 1111 0000 0000
-     we want to clear them:  0xF0FF = 1111 0000 1111 1111
-     */
-    state = MCP23017_ReadGPIO(0x02);
+    // Read the existing output commands.
+    if (!MCP23017_ReadGPIO(board, &state))
+    {
+        return false;
+    }
 
-    state = state & 0xF0FF;
+    // Create a mask with only the requested bit set.
+    mask = (uint16_t)(1U << pin);
 
-    MCP23017_WriteGPIO(0x02, state);
+    if (on)
+    {
+        // Set this bit; preserve all other bits.
+        state |= mask;
+    }
+    else
+    {
+        // Clear this bit; preserve all other bits.
+        state &= (uint16_t)~mask;
+    }
+
+    // Send the updated commands to the expander.
+    write_result= MCP23017_WriteGPIO(board, state);
+
+    return write_result;
 }
 
 
-void Relay_SelectSideB(uint8_t pin)
+bool Relay_AllOff(void)
 {
-    // Reject invalid pins before changing the current path.
+    bool success = true;
+
+    // Board 000: Side-A cable pins 1–16.
+    if (!MCP23017_WriteGPIO(0U, 0x0000U))
+    {
+        success = false;
+    }
+
+    // Board 001: Side-B cable pins 1–16.
+    if (!MCP23017_WriteGPIO(1U, 0x0000U))
+    {
+        success = false;
+    }
+
+    // Board 010: remaining Side-A and Side-B pins.
+    if (!MCP23017_WriteGPIO(2U, 0x0000U))
+    {
+        success = false;
+    }
+
+    return success;
+}
+
+bool Relay_SelectSideA(uint8_t pin)
+{
+    // Cable pin numbers are 1–20.
+    // Reject invalid numbers before changing any outputs.
     if ((pin < 1U) || (pin > 20U))
     {
-        return;
+        return false;
+    }
+
+    // Release the previous Side-A relay.
+    // Do not activate another relay if disconnection fails.
+    if (!Relay_DisconnectSideA())
+    {
+        return false;
+    }
+
+    if (pin <= 16U)
+    {
+        // Board 000: cable pins 1–16 use bits 0–15.
+        return MCP23017_WritePin(0U, (uint8_t)(pin - 1U), true);
+    }
+
+    // Shared board 010: cable pins 17–20 use bits 0–3 for side A
+    // Side B's output commands are preserved.
+    return MCP23017_WritePin(2U, (uint8_t)(pin - 17U), true);
+}
+
+
+bool Relay_SelectSideB(uint8_t pin)
+{
+    // Cable pin numbers are 1–20.
+    // Reject invalid numbers before changing any outputs.
+    if ((pin < 1U) || (pin > 20U))
+    {
+        return false;
     }
 
     // Release the previous Side-B relay.
-    // Side A remains selected.
-    Relay_DisconnectSideB();
+    // Stop if the disconnection commands fail.
+    if (!Relay_DisconnectSideB())
+    {
+        return false;
+    }
 
     if (pin <= 16U)
     {
         // Board 001: cable pins 1–16 use bits 0–15.
-        MCP23017_WritePin(0x01U, pin - 1U, 1U);
+        return MCP23017_WritePin(1U, (uint8_t)(pin - 1U), true);
     }
-    else
+
+    // Shared board 010: cable pins 17–20 use bits 8-11 for side B.
+    // Side A's output commands are preserved.
+    return MCP23017_WritePin(2U, (uint8_t)(pin - 9U),  true);
+}
+
+bool Relay_DisconnectSideA(void)
+{
+    uint16_t shared_state;
+    bool success = true;
+
+    // Board 000 controls Side-A cable pins 1–16.
+    // Command all its relays OFF.
+    if (!MCP23017_WriteGPIO(0U, 0x0000U))
     {
-        // Board 010: cable pins 17–20 use bits 8–11.
-        MCP23017_WritePin(0x02U, pin - 9U, 1U);
+        success = false;
     }
+
+    /*
+     Board 010 is shared:
+         Bits 0–3  -> Side-A cable pins 17–20.
+         Bits 8–11 -> Side-B cable pins 17–20.
+
+     Read the existing commands so Side B can be preserved.
+    */
+    if (!MCP23017_ReadGPIO(2U, &shared_state))
+    {
+        return false;
+    }
+
+    // Clear only Side A's four bits.
+    shared_state &= 0xFFF0U;
+
+    if (!MCP23017_WriteGPIO(2U, shared_state))
+    {
+        success = false;
+    }
+
+    return success;
+}
+
+bool Relay_DisconnectSideB(void)
+{
+    uint16_t shared_state;
+    bool success = true;
+
+    // Board 001 controls Side-B cable pins 1–16.
+    // Command all its relays OFF.
+    if (!MCP23017_WriteGPIO(1U, 0x0000U))
+    {
+        success = false;
+    }
+
+    // Read shared board 010 to preserve Side A's commands.
+    if (!MCP23017_ReadGPIO(2U, &shared_state))
+    {
+        return false;
+    }
+
+    /*
+     Clear bits 8–11: shared-board channels 9–12.
+     These control Side-B cable pins 17–20.
+     Preserve all other bits.
+    */
+    shared_state &= 0xF0FFU;
+
+    if (!MCP23017_WriteGPIO(2U, shared_state))
+    {
+        success = false;
+    }
+
+    return success;
 }
 
 

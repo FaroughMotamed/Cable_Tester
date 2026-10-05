@@ -7,12 +7,12 @@
 bool Relay_Init(void);
 bool MCP23017_WriteGPIO(uint8_t board, uint16_t outputs);
 bool MCP23017_ReadGPIO (uint8_t board, uint16_t *outputs);
+bool MCP23017_WritePin(uint8_t board, uint8_t pin, bool on);
 
-void Relay_AllOff(void);
-void Relay_SelectSideA(uint8_t pin);
-void Relay_SelectSideB(uint8_t pin);
-void Relay_DisconnectSideA(void);
-void Relay_DisconnectSideB(void);
+bool Relay_AllOff(void);
+bool Relay_SelectSideB(uint8_t pin);
+bool Relay_DisconnectSideA(void);
+bool Relay_DisconnectSideB(void);
 
 #endif /* RELAYS_H */
 
