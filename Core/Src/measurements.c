@@ -380,8 +380,7 @@ pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement
 
     *result = (pair_measurement_t){0};
 
-    if ((a_pin < 1U) || (a_pin > 20U) ||
-        (b_pin < 1U) || (b_pin > 20U))
+    if ((a_pin < 1U) || (a_pin > 20U) || (b_pin < 1U) || (b_pin > 20U))
     {
         return PAIR_INVALID_ARGUMENT;
     }
@@ -442,8 +441,7 @@ pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement
         }
 
         // Matching-pin samples must agree about connectivity.
-        if ((valid_count > 0U) &&
-            (connected != previous_connected))
+        if ((valid_count > 0U) &&  (connected != previous_connected))
         {
             valid_count = 0U;
             cable_sum = 0.0f;
@@ -476,8 +474,71 @@ pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement
 }
 
 
+bool scan_cable(uint8_t pin_count, cable_scan_t *scan)
+{
+    uint8_t a_pin;
+    uint8_t b_pin;
+    pair_status_t status;
+    bool measurements_ok = true;
 
+    if (scan == NULL)
+    {
+        return false;
+    }
 
+    // Clear measurements and previous fault information.
+    *scan = (cable_scan_t){0};
+
+    if ((pin_count < 1U) || (pin_count > CABLE_MAX_PINS))
+    {
+        scan->fault_status = PAIR_INVALID_ARGUMENT;
+        return false;
+    }
+
+    scan->pin_count = pin_count;
+    scan->fault_status = PAIR_MEASUREMENT_OK;
+
+    // Begin with every relay commanded OFF.
+    if (!Relay_AllOff())
+    {
+        scan->fault_status = PAIR_RELAY_FAULT;
+        return false;
+    }
+
+    // Select each Side-A pin in turn.
+    for (a_pin = 1U; a_pin <= pin_count; a_pin++)
+    {
+        // Keep A selected while checking all Side-B pins.
+        for (b_pin = 1U; b_pin <= pin_count; b_pin++)
+        {
+            status = test_conductor_pair(a_pin, b_pin, &scan->pair[a_pin - 1U][b_pin - 1U]
+            );
+
+            if (status != PAIR_MEASUREMENT_OK)
+            {
+                scan->fault_status = status;
+                scan->fault_a_pin = a_pin;
+                scan->fault_b_pin = b_pin;
+
+                measurements_ok = false;
+                break;
+            }
+
+            scan->completed_pairs++;
+        }
+
+        // Stop the outer loop too if a measurement failed.
+        if (!measurements_ok)
+        {
+            break;
+        }
+    }
+
+    // Always attempt shutdown after starting the scan.
+    scan->relay_shutdown_ok = Relay_AllOff();
+
+    return measurements_ok && scan->relay_shutdown_ok;
+}
 
 
 
