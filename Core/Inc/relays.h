@@ -14,6 +14,8 @@ bool Relay_SelectSideB(uint8_t pin);
 bool Relay_DisconnectSideA(void);
 bool Relay_DisconnectSideB(void);
 
+bool Relay_SelectPath(uint8_t a_pin, uint8_t b_pin);
+
 #endif /* RELAYS_H */
 
 

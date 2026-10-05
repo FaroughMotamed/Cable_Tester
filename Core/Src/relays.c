@@ -619,6 +619,74 @@ bool Relay_Init(void)
 
 
 
+#define RELAY_SETTLE_TIME_MS  50U
+
+bool Relay_SelectPath(uint8_t a_pin, uint8_t b_pin)
+{
+    uint16_t board_a_state;
+    uint16_t shared_state;
+    uint16_t expected_board_a = 0U;
+    uint16_t expected_shared_a = 0U;
+    bool side_a_matches;
+
+    // Reject invalid cable-pin numbers without changing outputs.
+    if ((a_pin < 1U) || (a_pin > 20U) ||
+        (b_pin < 1U) || (b_pin > 20U))
+    {
+        return false;
+    }
+
+    // Read the existing Side-A output commands.
+    if (!MCP23017_ReadGPIO(0U, &board_a_state))
+    {
+        (void)Relay_AllOff();
+        return false;
+    }
+
+    if (!MCP23017_ReadGPIO(2U, &shared_state))
+    {
+        (void)Relay_AllOff();
+        return false;
+    }
+
+    // Calculate the required Side-A output pattern.
+    if (a_pin <= 16U)
+    {
+        expected_board_a = (uint16_t)(1U << (a_pin - 1U));
+    }
+    else
+    {
+        expected_shared_a = (uint16_t)(1U << (a_pin - 17U));
+    }
+
+    // Only bits 0–3 of the shared board belong to Side A.
+    side_a_matches = (board_a_state == expected_board_a) && ((shared_state & 0x000FU) == expected_shared_a);
+
+    // Keep Side A energized when it is already selected correctly.
+    if (!side_a_matches)
+    {
+        if (!Relay_SelectSideA(a_pin))
+        {
+            (void)Relay_AllOff();
+            return false;
+        }
+    }
+
+    // Release the previous B relay and activate the requested one.
+    if (!Relay_SelectSideB(b_pin))
+    {
+        (void)Relay_AllOff();
+        return false;
+    }
+
+    // Give release and activation one shared settling period.
+    HAL_Delay(RELAY_SETTLE_TIME_MS);
+
+    return true;
+}
+
+
+
 
 
 
