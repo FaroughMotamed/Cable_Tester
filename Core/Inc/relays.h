@@ -6,6 +6,7 @@
 
 bool Relay_Init(void);
 bool MCP23017_WriteGPIO(uint8_t board, uint16_t outputs);
+bool MCP23017_ReadGPIO (uint8_t board, uint16_t *outputs);
 
 void Relay_AllOff(void);
 void Relay_SelectSideA(uint8_t pin);

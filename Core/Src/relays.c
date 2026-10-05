@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "relays.h"
+#include <stddef.h>
 
 
 /*
@@ -272,6 +273,61 @@ MCP23017_WriteGPIO(0U, 0x0000U); // Board 000: all OFF.
 MCP23017_WriteGPIO(1U, 0x0001U); // Board 001: channel 1 ON.
 MCP23017_WriteGPIO(2U, 0x0100U); // Board 010: channel 9 ON.
 */
+
+
+bool MCP23017_ReadGPIO(uint8_t board, uint16_t *outputs)
+{
+    uint16_t device_address;
+    uint8_t port_a;
+    uint8_t port_b;
+
+    // Validate the output pointer.
+    if (outputs == NULL)
+    {
+        return false;
+    }
+
+    *outputs = 0U;
+
+    // Only boards 000, 001 and 010 are used.
+    if (board > 2U)
+    {
+        return false;
+    }
+
+    device_address = (uint16_t)((MCP23017_BASE_ADDRESS + board) << 1U);
+
+    // Read the commanded states for channels 1–8.
+    if (HAL_I2C_Mem_Read(&hi2c1,
+                         device_address,
+                         MCP23017_OLATA,
+                         I2C_MEMADD_SIZE_8BIT,
+                         &port_a,
+                         1U,
+                         MCP23017_TIMEOUT_MS) != HAL_OK)
+    {
+        return false;
+    }
+
+    // Read the commanded states for channels 9–16.
+    if (HAL_I2C_Mem_Read(&hi2c1,
+                         device_address,
+                         MCP23017_OLATB,
+                         I2C_MEMADD_SIZE_8BIT,
+                         &port_b,
+                         1U,
+                         MCP23017_TIMEOUT_MS) != HAL_OK)
+    {
+        return false;
+    }
+
+    // Place Port B in bits 8–15 and Port A in bits 0–7.
+    *outputs = (uint16_t)(  ((uint16_t)port_b << 8U) | (uint16_t)port_a  );
+
+    return true;
+}
+
+
 
 void Relay_AllOff(void)
 {
