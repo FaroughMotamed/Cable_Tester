@@ -358,15 +358,23 @@ bool test_conductor_pair(uint8_t end_a_pin, uint8_t end_b_pin, float *resistance
 */
 
 
+
+/*
+Takes two valid samples for matching pins, measuring both voltages.
+Takes one valid sample for different pins, measuring only resistor voltage.
+Accepts sense voltages from −5 mV to zero as zero current.
+Retries invalid measurements and attempts to release all relays on timeout.
+Leaves relays selected on success, allowing the scan to keep side A selected.
+*/
 pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement_t *result)
 {
-    uint32_t start_ms;
-    uint8_t valid_count = 0U;
-    uint8_t required_count;
-    bool previous_connected = false;
+    uint32_t start_ms ;
+    uint8_t  valid_count = 0U;
+    uint8_t  required_count;
+    bool     previous_connected = false;
 
-    float cable_voltage;
-    float sense_voltage;
+    float cable_voltage = 0.0f;
+    float sense_voltage = 0.0f;
     float current;
     float resistance;
     float cable_sum = 0.0f;
@@ -380,10 +388,13 @@ pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement
 
     *result = (pair_measurement_t){0};
 
-    if ((a_pin < 1U) || (a_pin > 20U) || (b_pin < 1U) || (b_pin > 20U))
+
+    if ((a_pin < 1U) || (a_pin > CABLE_MAX_PINS) ||
+        (b_pin < 1U) || (b_pin > CABLE_MAX_PINS))
     {
         return PAIR_INVALID_ARGUMENT;
     }
+
 
     // Select the relays and wait 50 ms inside Relay_SelectPath().
     if (!Relay_SelectPath(a_pin, b_pin))
@@ -398,11 +409,29 @@ pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement
 
     while ((HAL_GetTick() - start_ms) < 3000U)
     {
-        // Existing function reads sense voltage first, cable second.
-        if (!measure_voltages(&cable_voltage, &sense_voltage))
+
+        // Reset values before each measurement attempt.
+        cable_voltage = 0.0f;
+        sense_voltage = 0.0f;
+
+        // Matching pins need both voltages to calculate cable resistance.
+        if (a_pin == b_pin)
         {
-            continue;
+            // Existing function reads sense voltage first, cable second.
+            if (!measure_voltages(&cable_voltage, &sense_voltage))
+            {
+                continue;
+            }
         }
+        else
+        {
+            // Cross/short checks need only the resistor voltage.
+            if (!measure_sense_voltage(&sense_voltage))
+            {
+                continue;
+            }
+        }
+   
 
         // Do not accept a sample completed after the deadline.
         if ((HAL_GetTick() - start_ms) >= 3000U)
@@ -413,7 +442,7 @@ pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement
         // Reject invalid numbers and unreasonable sense voltages.
         if (!isfinite(cable_voltage) ||
             !isfinite(sense_voltage) ||
-            (sense_voltage < -0.005f) ||
+            (sense_voltage < -0.010f) ||
             (sense_voltage > 2.5f))
         {
             continue;
@@ -432,13 +461,15 @@ pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement
 
         resistance = 0.0f;
 
-        if (connected)
+        // Calculate resistance only for connected matching pins.
+        if (connected && (a_pin == b_pin))
         {
-            if (!calculate_resistance(cable_voltage, current,  &resistance))
+            if (!calculate_resistance(cable_voltage, current, &resistance))
             {
                 continue;
             }
         }
+
 
         // Matching-pin samples must agree about connectivity.
         if ((valid_count > 0U) &&  (connected != previous_connected))
@@ -474,19 +505,28 @@ pair_status_t test_conductor_pair(uint8_t a_pin, uint8_t b_pin, pair_measurement
 }
 
 
+/*
+Scan all A/B pin pairs and store their measurements.
+Keep side A selected while stepping through side B.
+Stop on a measurement or relay fault and record the failed pair.
+Attempt to turn all relays OFF when the scan ends.
+Return true only if the scan and final shutdown succeed;
+cable pass/fail is evaluated separately.
+*/
 bool scan_cable(uint8_t pin_count, cable_scan_t *scan)
 {
     uint8_t a_pin;
     uint8_t b_pin;
     pair_status_t status;
     bool measurements_ok = true;
+    bool function_output =true;
 
     if (scan == NULL)
     {
         return false;
     }
 
-    // Clear measurements and previous fault information.
+    // Clear the measurements and previous fault informationon the enum
     *scan = (cable_scan_t){0};
 
     if ((pin_count < 1U) || (pin_count > CABLE_MAX_PINS))
@@ -511,8 +551,7 @@ bool scan_cable(uint8_t pin_count, cable_scan_t *scan)
         // Keep A selected while checking all Side-B pins.
         for (b_pin = 1U; b_pin <= pin_count; b_pin++)
         {
-            status = test_conductor_pair(a_pin, b_pin, &scan->pair[a_pin - 1U][b_pin - 1U]
-            );
+            status = test_conductor_pair(a_pin, b_pin, &scan->pair[a_pin - 1U][b_pin - 1U]);
 
             if (status != PAIR_MEASUREMENT_OK)
             {
@@ -537,12 +576,161 @@ bool scan_cable(uint8_t pin_count, cable_scan_t *scan)
     // Always attempt shutdown after starting the scan.
     scan->relay_shutdown_ok = Relay_AllOff();
 
-    return measurements_ok && scan->relay_shutdown_ok;
+    function_output = measurements_ok && scan->relay_shutdown_ok;
+
+    return function_output;
 }
 
 
 
 
+/*
+Interpret a completed cable scan.
+
+For each A pin:
+- No connected B pins: OPEN.
+- Multiple connections involving that path: SHORT.
+- One connection to the wrong B pin: CROSS.
+- Matching connection above the resistance limit: HIGH RESISTANCE.
+- Otherwise: OK.
+
+A cable passes only when every selected pin is OK.
+*/
+bool evaluate_cable_scan(const cable_scan_t *scan, float resistance_limit_ohms, cable_result_t *result)
+{
+    uint8_t row_count[CABLE_MAX_PINS] = {0};
+    uint8_t column_count[CABLE_MAX_PINS] = {0};
+
+    uint8_t a;
+    uint8_t b;
+    uint8_t pin_count;
+    bool short_detected;
+    float resistance;
+
+    if (result == NULL)
+    {
+        return false;
+    }
+
+    *result = (cable_result_t){0};
+
+    if ((scan == NULL) || !isfinite(resistance_limit_ohms) || (resistance_limit_ohms <= 0.0f))
+    {
+        return false;
+    }
+
+    pin_count = scan->pin_count;
+
+    // Evaluate only a complete scan with successful relay shutdown.
+    if ((pin_count < 1U) ||
+        (pin_count > CABLE_MAX_PINS) ||
+        (scan->fault_status != PAIR_MEASUREMENT_OK) ||
+        !scan->relay_shutdown_ok ||
+        (scan->completed_pairs !=
+         (uint16_t)(pin_count * pin_count)))
+    {
+        return false;
+    }
+
+    /*
+    Count connections in both directions.
+
+    Checking columns also detects two different A pins
+    connected to the same B pin.
+    */
+    for (a = 0U; a < pin_count; a++)
+    {
+        for (b = 0U; b < pin_count; b++)
+        {
+            if (scan->pair[a][b].connected)
+            {
+                row_count[a]++;
+                column_count[b]++;
+            }
+        }
+    }
+
+    // Verify resistance values before producing final results.
+    for (a = 0U; a < pin_count; a++)
+    {
+        if (scan->pair[a][a].connected)
+        {
+            resistance = scan->pair[a][a].resistance_ohms;
+
+            if (!isfinite(resistance) || (resistance < 0.0f))
+            {
+                return false;
+            }
+        }
+    }
+
+    result->pin_count = pin_count;
+    result->passed = true;
+
+    for (a = 0U; a < pin_count; a++)
+    {
+        // Save every B destination for later display or logging.
+        for (b = 0U; b < pin_count; b++)
+        {
+            if (scan->pair[a][b].connected)
+            {
+                result->conductor[a].connected_b_mask |=
+                    ((uint32_t)1U << b);
+            }
+        }
+
+        if (scan->pair[a][a].connected)
+        {
+            result->conductor[a].resistance_ohms =
+                scan->pair[a][a].resistance_ohms;
+        }
+
+        if (row_count[a] == 0U)
+        {
+            result->conductor[a].status = CONDUCTOR_OPEN;
+        }
+        else
+        {
+            short_detected = (row_count[a] > 1U);
+
+            // A single B destination may also be shared by other A pins.
+            for (b = 0U; b < pin_count; b++)
+            {
+                if (scan->pair[a][b].connected &&
+                    (column_count[b] > 1U))
+                {
+                    short_detected = true;
+                }
+            }
+
+            if (short_detected)
+            {
+                result->conductor[a].status = CONDUCTOR_SHORT;
+            }
+            else if (!scan->pair[a][a].connected)
+            {
+                result->conductor[a].status = CONDUCTOR_CROSS;
+            }
+            else if (result->conductor[a].resistance_ohms >
+                     resistance_limit_ohms)
+            {
+                result->conductor[a].status =
+                    CONDUCTOR_HIGH_RESISTANCE;
+            }
+            else
+            {
+                result->conductor[a].status = CONDUCTOR_OK;
+            }
+        }
+
+        if (result->conductor[a].status != CONDUCTOR_OK)
+        {
+            result->passed = false;
+        }
+    }
+
+    return true;
+}
 
 
 

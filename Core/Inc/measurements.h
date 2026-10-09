@@ -3,6 +3,7 @@
 #define MEASUREMENTS_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #define CABLE_MAX_PINS  20U
 
@@ -183,6 +184,47 @@ IMPORTANT:
     Successful OFF commands do not prove mechanical contacts opened.
 */
 bool scan_cable(uint8_t pin_count, cable_scan_t *scan);
+
+
+// Final condition of each cable pin.
+typedef enum
+{
+    CONDUCTOR_OK = 0,
+    CONDUCTOR_OPEN,
+    CONDUCTOR_CROSS,
+    CONDUCTOR_SHORT,
+    CONDUCTOR_HIGH_RESISTANCE
+} conductor_status_t;
+
+
+typedef struct
+{
+    conductor_status_t status;
+
+    // Bit 0 means B1, bit 1 means B2, and so on.
+    // Records every B pin connected to this A pin.
+    uint32_t connected_b_mask;
+
+    // Meaningful when the matching A/B pins are connected.
+    float resistance_ohms;
+} conductor_result_t;
+
+
+
+typedef struct
+{
+    uint8_t pin_count;
+    bool passed;
+
+    conductor_result_t conductor[CABLE_MAX_PINS];
+} cable_result_t;
+
+
+// Interpret a complete scan. Does not operate relays or read the ADC.
+// true means evaluation succeeded; result->passed says whether the cable passed.
+bool evaluate_cable_scan(const cable_scan_t *scan,
+                         float resistance_limit_ohms,
+                         cable_result_t *result);
 
 
 #endif

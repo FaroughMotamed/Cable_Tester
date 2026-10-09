@@ -193,7 +193,7 @@ extern I2C_HandleTypeDef hi2c1;
 #define MCP23017_IODIRB        0x01U  // Register address for the direction of the eight Port B pins.
 #define MCP23017_IOCON         0x0AU  // Register address for the chip's general configuration settings : BANK, sequential addressing, interrupts, etc.
 
-#define RELAY_SETTLE_TIME_MS  50U
+#define RELAY_SETTLE_TIME_MS   40U
 /*
 Examples:
 MCP23017_WriteGPIO(0U, 0x0000U); // Board 000: all OFF.
