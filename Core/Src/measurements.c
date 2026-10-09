@@ -588,11 +588,11 @@ bool scan_cable(uint8_t pin_count, cable_scan_t *scan)
 Interpret a completed cable scan.
 
 For each A pin:
-- No connected B pins: OPEN.
-- Multiple connections involving that path: SHORT.
-- One connection to the wrong B pin: CROSS.
-- Matching connection above the resistance limit: HIGH RESISTANCE.
-- Otherwise: OK.
+    - No connected B pins: OPEN.
+    - Multiple connections involving that path: SHORT.
+    - One connection to the wrong B pin: CROSS.
+    - Matching connection above the resistance limit: HIGH RESISTANCE.
+    - Otherwise: OK.
 
 A cable passes only when every selected pin is OK.
 */
@@ -621,7 +621,7 @@ bool evaluate_cable_scan(const cable_scan_t *scan, float resistance_limit_ohms, 
 
     pin_count = scan->pin_count;
 
-    // Evaluate only a complete scan with successful relay shutdown.
+    // if there is a wrong condition, return false and don't go to complete evaluation
     if ((pin_count < 1U) ||
         (pin_count > CABLE_MAX_PINS) ||
         (scan->fault_status != PAIR_MEASUREMENT_OK) ||
@@ -634,6 +634,9 @@ bool evaluate_cable_scan(const cable_scan_t *scan, float resistance_limit_ohms, 
 
     /*
     Count connections in both directions.
+    if there is a onnection batween pin a on A side and pon b on B side,
+    increment both pin a and pin b. Pins where the count is more than 1,
+    means there is two connections to them.
 
     Checking columns also detects two different A pins
     connected to the same B pin.
@@ -644,8 +647,8 @@ bool evaluate_cable_scan(const cable_scan_t *scan, float resistance_limit_ohms, 
         {
             if (scan->pair[a][b].connected)
             {
-                row_count[a]++;
-                column_count[b]++;
+                row_count[a] = row_count[a] +1;
+                column_count[b] = column_count[b] +1;
             }
         }
     }
@@ -669,20 +672,30 @@ bool evaluate_cable_scan(const cable_scan_t *scan, float resistance_limit_ohms, 
 
     for (a = 0U; a < pin_count; a++)
     {
-        // Save every B destination for later display or logging.
+
+        // Save B destinations and other A pins sharing those destinations.
         for (b = 0U; b < pin_count; b++)
         {
             if (scan->pair[a][b].connected)
             {
-                result->conductor[a].connected_b_mask |=
-                    ((uint32_t)1U << b);
+                // Record this B destination.
+                result->conductor[a].connected_b_mask |= ((uint32_t)1U << b);
+
+                // Find other A pins connected to the same B pin.
+                for (uint8_t other = 0U; other < pin_count; other++)
+                {
+                    if ((other != a) &&
+                        scan->pair[other][b].connected)
+                    {
+                        result->conductor[a].shared_a_mask |= ((uint32_t)1U << other);
+                    }
+                }
             }
         }
 
         if (scan->pair[a][a].connected)
         {
-            result->conductor[a].resistance_ohms =
-                scan->pair[a][a].resistance_ohms;
+            result->conductor[a].resistance_ohms = scan->pair[a][a].resistance_ohms;
         }
 
         if (row_count[a] == 0U)
@@ -711,11 +724,9 @@ bool evaluate_cable_scan(const cable_scan_t *scan, float resistance_limit_ohms, 
             {
                 result->conductor[a].status = CONDUCTOR_CROSS;
             }
-            else if (result->conductor[a].resistance_ohms >
-                     resistance_limit_ohms)
+            else if (result->conductor[a].resistance_ohms >  resistance_limit_ohms)
             {
-                result->conductor[a].status =
-                    CONDUCTOR_HIGH_RESISTANCE;
+                result->conductor[a].status = CONDUCTOR_HIGH_RESISTANCE;
             }
             else
             {

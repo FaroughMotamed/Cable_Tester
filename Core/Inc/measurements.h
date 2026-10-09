@@ -213,18 +213,23 @@ typedef struct
 
 typedef struct
 {
-    uint8_t pin_count;
-    bool passed;
+    conductor_status_t status;
 
-    conductor_result_t conductor[CABLE_MAX_PINS];
-} cable_result_t;
+    // B pins connected to this A pin.
+    // Bit 0 = B1, bit 1 = B2, etc.
+    uint32_t connected_b_mask;
 
+    // Other A pins sharing a B connection with this A pin.
+    // Bit 0 = A1, bit 1 = A2, etc.
+    uint32_t shared_a_mask;
 
-// Interpret a complete scan. Does not operate relays or read the ADC.
-// true means evaluation succeeded; result->passed says whether the cable passed.
-bool evaluate_cable_scan(const cable_scan_t *scan,
-                         float resistance_limit_ohms,
-                         cable_result_t *result);
+    float resistance_ohms;
+
+} conductor_result_t;
+
+// Interpret a complete scan.
+// true means evaluation succeeded; result->passed says whether the cable passed or failed.
+bool evaluate_cable_scan(const cable_scan_t *scan, float resistance_limit_ohms, cable_result_t *result);
 
 
 #endif
